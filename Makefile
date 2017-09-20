@@ -23,5 +23,9 @@ mshabal_sse4.o: mshabal_sse4.c
 mshabal256_avx2.o: mshabal256_avx2.c
 		$(CC) $(CFLAGS) -mavx2 -c -o mshabal256_avx2.o mshabal256_avx2.c
 
+
+test:		plot64
+		./test.pl
+
 clean:
 		rm -f mshabal_sse4.o mshabal256_avx2.o shabal64.o helper64.o plot64 helper64.o cg_obup.tgz bin/*

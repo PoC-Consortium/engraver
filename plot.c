@@ -1,5 +1,7 @@
 // For Emacs: -*- mode:c++; eval: (folding-mode 1) -*-
-// Usage: ./plot -k <public key> -x <core> -s <start nonce> -n <nonces> -m <stagger size> -t <threads>
+// Usage: ./plot64 -k <public key> -x <core> -s <start nonce> -n <nonces> -m <stagger size> -t <threads>
+
+// {{{ include, define, vars
 
 #define USE_MULTI_SHABAL
 #define _GNU_SOURCE
@@ -50,19 +52,139 @@ int ofd;
 char *cache, *wcache, *acache[2];
 char *outputdir = DEFAULTDIR;
 
-#define SET_NONCE(gendata, nonce) \
-  xv = (char*)&nonce; \
-  gendata[NONCE_SIZE +  8] = xv[7]; gendata[NONCE_SIZE +  9] = xv[6]; gendata[NONCE_SIZE + 10] = xv[5]; gendata[NONCE_SIZE + 11] = xv[4]; \
-  gendata[NONCE_SIZE + 12] = xv[3]; gendata[NONCE_SIZE + 13] = xv[2]; gendata[NONCE_SIZE + 14] = xv[1]; gendata[NONCE_SIZE + 15] = xv[0]
+#define SET_NONCE(gendata, nonce, offset)      \
+    xv = (char*)&nonce;                        \
+    gendata[NONCE_SIZE + offset]     = xv[7];  \
+    gendata[NONCE_SIZE + offset + 1] = xv[6];  \
+    gendata[NONCE_SIZE + offset + 2] = xv[5];  \
+    gendata[NONCE_SIZE + offset + 3] = xv[4];  \
+    gendata[NONCE_SIZE + offset + 4] = xv[3];  \
+    gendata[NONCE_SIZE + offset + 5] = xv[2];  \
+    gendata[NONCE_SIZE + offset + 6] = xv[1];  \
+    gendata[NONCE_SIZE + offset + 7] = xv[0]
 
-// {{{ m256nonce
+// }}}
+
+// {{{ nonce             original algorithm
+
+void nonce(uint64_t addr, uint64_t nonce, uint64_t cachepos) {
+    char final[32];
+    char gendata[16 + NONCE_SIZE];
+//    printf("Hallo\n");
+    char *xv;
+        
+    SET_NONCE(gendata, addr,  0);
+    SET_NONCE(gendata, nonce, 8);
+
+    shabal_context x;
+    int i, len;
+
+    for (i = NONCE_SIZE; i > 0; i -= HASH_SIZE) {
+        shabal_init(&x, 256);
+        len = NONCE_SIZE + 16 - i;
+        if (len > HASH_CAP)
+            len = HASH_CAP;
+        shabal(&x, &gendata[i], len);
+        shabal_close(&x, 0, 0, &gendata[i - HASH_SIZE]);
+    }
+        
+    shabal_init(&x, 256);
+    shabal(&x, gendata, 16 + NONCE_SIZE);
+    shabal_close(&x, 0, 0, final);
+
+    // XOR with final
+    uint64_t *start = (uint64_t*)gendata;
+    uint64_t *fint = (uint64_t*)&final;
+
+    for(i = 0; i < NONCE_SIZE; i += 32) {
+        *start ^= fint[0]; start ++;
+        *start ^= fint[1]; start ++;
+        *start ^= fint[2]; start ++;
+        *start ^= fint[3]; start ++;
+    }
+
+    // Sort them:
+    for (i = 0; i < NONCE_SIZE; i += SCOOP_SIZE)
+        memmove(&cache[cachepos * SCOOP_SIZE + (uint64_t)i * staggersize], &gendata[i], SCOOP_SIZE);
+}
+
+// }}}
+// {{{ mnonce            SSE4 version
+
+int
+mnonce(uint64_t addr,
+       uint64_t nonce1, uint64_t nonce2, uint64_t nonce3, uint64_t nonce4,
+       uint64_t cachepos1, uint64_t cachepos2, uint64_t cachepos3, uint64_t cachepos4) {
+    char final1[32], final2[32], final3[32], final4[32];
+    char gendata1[16 + NONCE_SIZE], gendata2[16 + NONCE_SIZE], gendata3[16 + NONCE_SIZE], gendata4[16 + NONCE_SIZE];
+
+    char *xv = (char*)&addr;
+
+    gendata1[NONCE_SIZE]     = xv[7];
+    gendata1[NONCE_SIZE + 1] = xv[6];
+    gendata1[NONCE_SIZE + 2] = xv[5];
+    gendata1[NONCE_SIZE + 3] = xv[4];
+    gendata1[NONCE_SIZE + 4] = xv[3];
+    gendata1[NONCE_SIZE + 5] = xv[2];
+    gendata1[NONCE_SIZE + 6] = xv[1];
+    gendata1[NONCE_SIZE + 7] = xv[0];
+
+    for (int i = NONCE_SIZE; i <= NONCE_SIZE + 7; ++i) {
+        gendata2[i] = gendata1[i];
+        gendata3[i] = gendata1[i];
+        gendata4[i] = gendata1[i];
+    }
+
+    SET_NONCE(gendata1, nonce1, 8);
+    SET_NONCE(gendata2, nonce2, 8);
+    SET_NONCE(gendata3, nonce3, 8);
+    SET_NONCE(gendata4, nonce4, 8);
+
+    mshabal_context x;
+    int i, len;
+
+    for (i = NONCE_SIZE; i > 0; i -= HASH_SIZE) {
+      sse4_mshabal_init(&x, 256);
+
+      len = NONCE_SIZE + 16 - i;
+      if (len > HASH_CAP)
+          len = HASH_CAP;
+
+      sse4_mshabal(&x, &gendata1[i], &gendata2[i], &gendata3[i], &gendata4[i], len);
+      sse4_mshabal_close(&x, 0, 0, 0, 0, 0, &gendata1[i - HASH_SIZE], &gendata2[i - HASH_SIZE], &gendata3[i - HASH_SIZE], &gendata4[i - HASH_SIZE]);
+    }
+
+    sse4_mshabal_init(&x, 256);
+    sse4_mshabal(&x, gendata1, gendata2, gendata3, gendata4, 16 + NONCE_SIZE);
+    sse4_mshabal_close(&x, 0, 0, 0, 0, 0, final1, final2, final3, final4);
+
+    // XOR with final
+    for (i = 0; i < NONCE_SIZE; i++) {
+        gendata1[i] ^= (final1[i % 32]);
+        gendata2[i] ^= (final2[i % 32]);
+        gendata3[i] ^= (final3[i % 32]);
+        gendata4[i] ^= (final4[i % 32]);
+    }
+
+    // Sort them:
+    for (i = 0; i < NONCE_SIZE; i += 64) {
+        memmove(&cache[cachepos1 * 64 + (uint64_t)i * staggersize], &gendata1[i], 64);
+        memmove(&cache[cachepos2 * 64 + (uint64_t)i * staggersize], &gendata2[i], 64);
+        memmove(&cache[cachepos3 * 64 + (uint64_t)i * staggersize], &gendata3[i], 64);
+        memmove(&cache[cachepos4 * 64 + (uint64_t)i * staggersize], &gendata4[i], 64);
+    }
+
+    return 0;
+}
+
+// }}}
+// {{{ m256nonce         AVX2 version
 
 int m256nonce(uint64_t addr,
               uint64_t nonce1, uint64_t nonce2, uint64_t nonce3, uint64_t nonce4,
               uint64_t nonce5, uint64_t nonce6, uint64_t nonce7, uint64_t nonce8,
               uint64_t cachepos1, uint64_t cachepos2, uint64_t cachepos3, uint64_t cachepos4,
-              uint64_t cachepos5, uint64_t cachepos6, uint64_t cachepos7, uint64_t cachepos8)
-{
+              uint64_t cachepos5, uint64_t cachepos6, uint64_t cachepos7, uint64_t cachepos8) {
     char final1[32], final2[32], final3[32], final4[32];
     char final5[32], final6[32], final7[32], final8[32];
     char gendata1[16 + NONCE_SIZE], gendata2[16 + NONCE_SIZE], gendata3[16 + NONCE_SIZE], gendata4[16 + NONCE_SIZE];
@@ -85,14 +207,14 @@ int m256nonce(uint64_t addr,
 
     xv = (char*)&nonce1;
 
-    SET_NONCE(gendata1, nonce1);
-    SET_NONCE(gendata2, nonce2);
-    SET_NONCE(gendata3, nonce3);
-    SET_NONCE(gendata4, nonce4);
-    SET_NONCE(gendata5, nonce5);
-    SET_NONCE(gendata6, nonce6);
-    SET_NONCE(gendata7, nonce7);
-    SET_NONCE(gendata8, nonce8);
+    SET_NONCE(gendata1, nonce1, 8);
+    SET_NONCE(gendata2, nonce2, 8);
+    SET_NONCE(gendata3, nonce3, 8);
+    SET_NONCE(gendata4, nonce4, 8);
+    SET_NONCE(gendata5, nonce5, 8);
+    SET_NONCE(gendata6, nonce6, 8);
+    SET_NONCE(gendata7, nonce7, 8);
+    SET_NONCE(gendata8, nonce8, 8);
 
     mshabal256_context x;
     int i, len;
@@ -142,171 +264,71 @@ int m256nonce(uint64_t addr,
     return 0;
 }
 // }}}
+// {{{ work_i
 
-int mnonce(uint64_t addr,
-           uint64_t nonce1, uint64_t nonce2, uint64_t nonce3, uint64_t nonce4,
-           uint64_t cachepos1, uint64_t cachepos2, uint64_t cachepos3, uint64_t cachepos4)
-{
-    char final1[32], final2[32], final3[32], final4[32];
-    char gendata1[16 + NONCE_SIZE], gendata2[16 + NONCE_SIZE], gendata3[16 + NONCE_SIZE], gendata4[16 + NONCE_SIZE];
-
-    char *xv = (char*)&addr;
-
-    gendata1[NONCE_SIZE] = xv[7]; gendata1[NONCE_SIZE + 1] = xv[6]; gendata1[NONCE_SIZE + 2] = xv[5]; gendata1[NONCE_SIZE + 3] = xv[4];
-    gendata1[NONCE_SIZE + 4] = xv[3]; gendata1[NONCE_SIZE + 5] = xv[2]; gendata1[NONCE_SIZE + 6] = xv[1]; gendata1[NONCE_SIZE + 7] = xv[0];
-
-    for (int i = NONCE_SIZE; i <= NONCE_SIZE + 7; ++i)
-    {
-      gendata2[i] = gendata1[i];
-      gendata3[i] = gendata1[i];
-      gendata4[i] = gendata1[i];
-    }
-
-    SET_NONCE(gendata1, nonce1);
-    SET_NONCE(gendata2, nonce2);
-    SET_NONCE(gendata3, nonce3);
-    SET_NONCE(gendata4, nonce4);
-
-    mshabal_context x;
-    int i, len;
-
-    for (i = NONCE_SIZE; i > 0; i -= HASH_SIZE)
-    {
-
-      sse4_mshabal_init(&x, 256);
-
-      len = NONCE_SIZE + 16 - i;
-      if (len > HASH_CAP)
-        len = HASH_CAP;
-
-      sse4_mshabal(&x, &gendata1[i], &gendata2[i], &gendata3[i], &gendata4[i], len);
-      sse4_mshabal_close(&x, 0, 0, 0, 0, 0, &gendata1[i - HASH_SIZE], &gendata2[i - HASH_SIZE], &gendata3[i - HASH_SIZE], &gendata4[i - HASH_SIZE]);
-
-    }
-
-    sse4_mshabal_init(&x, 256);
-    sse4_mshabal(&x, gendata1, gendata2, gendata3, gendata4, 16 + NONCE_SIZE);
-    sse4_mshabal_close(&x, 0, 0, 0, 0, 0, final1, final2, final3, final4);
-
-    // XOR with final
-    for (i = 0; i < NONCE_SIZE; i++)
-    {
-      gendata1[i] ^= (final1[i % 32]);
-      gendata2[i] ^= (final2[i % 32]);
-      gendata3[i] ^= (final3[i % 32]);
-      gendata4[i] ^= (final4[i % 32]);
-    }
-
-    // Sort them:
-    for (i = 0; i < NONCE_SIZE; i += 64)
-    {
-      memmove(&cache[cachepos1 * 64 + (uint64_t)i * staggersize], &gendata1[i], 64);
-      memmove(&cache[cachepos2 * 64 + (uint64_t)i * staggersize], &gendata2[i], 64);
-      memmove(&cache[cachepos3 * 64 + (uint64_t)i * staggersize], &gendata3[i], 64);
-      memmove(&cache[cachepos4 * 64 + (uint64_t)i * staggersize], &gendata4[i], 64);
-    }
-
-    return 0;
-}
-
-
-void nonce(uint64_t addr, uint64_t nonce, uint64_t cachepos) {
-    char final[32];
-    char gendata[16 + NONCE_SIZE];
-
-    char *xv = (char*)&addr;
-        
-    gendata[NONCE_SIZE] = xv[7]; gendata[NONCE_SIZE+1] = xv[6]; gendata[NONCE_SIZE+2] = xv[5]; gendata[NONCE_SIZE+3] = xv[4];
-    gendata[NONCE_SIZE+4] = xv[3]; gendata[NONCE_SIZE+5] = xv[2]; gendata[NONCE_SIZE+6] = xv[1]; gendata[NONCE_SIZE+7] = xv[0];
-
-    xv = (char*)&nonce;
-
-    gendata[NONCE_SIZE+8] = xv[7]; gendata[NONCE_SIZE+9] = xv[6]; gendata[NONCE_SIZE+10] = xv[5]; gendata[NONCE_SIZE+11] = xv[4];
-    gendata[NONCE_SIZE+12] = xv[3]; gendata[NONCE_SIZE+13] = xv[2]; gendata[NONCE_SIZE+14] = xv[1]; gendata[NONCE_SIZE+15] = xv[0];
-
-    shabal_context x;
-    int i, len;
-
-    for(i = NONCE_SIZE; i > 0; i -= HASH_SIZE) {
-        shabal_init(&x, 256);
-        len = NONCE_SIZE + 16 - i;
-        if(len > HASH_CAP)
-            len = HASH_CAP;
-        shabal(&x, &gendata[i], len);
-        shabal_close(&x, 0, 0, &gendata[i - HASH_SIZE]);
-    }
-        
-    shabal_init(&x, 256);
-    shabal(&x, gendata, 16 + NONCE_SIZE);
-    shabal_close(&x, 0, 0, final);
-
-
-    // XOR with final
-    uint64_t *start = (uint64_t*)gendata;
-    uint64_t *fint = (uint64_t*)&final;
-
-    for(i = 0; i < NONCE_SIZE; i += 32) {
-        *start ^= fint[0]; start ++;
-        *start ^= fint[1]; start ++;
-        *start ^= fint[2]; start ++;
-        *start ^= fint[3]; start ++;
-    }
-
-    // Sort them:
-    for(i = 0; i < NONCE_SIZE; i+=64)
-        memmove(&cache[cachepos * 64 + (uint64_t)i * staggersize], &gendata[i], 64);
-}
-
-void *work_i(void *x_void_ptr) {
+void *
+work_i(void *x_void_ptr) {
     uint64_t *x_ptr = (uint64_t *)x_void_ptr;
     uint64_t i = *x_ptr;
-
+    
     uint32_t n;
-    for(n=0; n<noncesperthread; n++) {
-        if(selecttype == 1) {
-            if (n + 4 < noncesperthread)
-                {
-                    mnonce(addr,
-                           (i + n + 0), (i + n + 1), (i + n + 2), (i + n + 3),
-                           (uint64_t)(i - startnonce + n + 0),
-                           (uint64_t)(i - startnonce + n + 1),
-                           (uint64_t)(i - startnonce + n + 2),
-                           (uint64_t)(i - startnonce + n + 3));
-
-                    n += 3;
-                } else
+    for (n = 0; n < noncesperthread; n++) {
+        if (selecttype == 1) { // SSE4
+            if (n + 4 <= noncesperthread) {
+                mnonce(addr,
+                       (i + n + 0), (i + n + 1), (i + n + 2), (i + n + 3),
+                       (uint64_t)(i - startnonce + n + 0),
+                       (uint64_t)(i - startnonce + n + 1),
+                       (uint64_t)(i - startnonce + n + 2),
+                       (uint64_t)(i - startnonce + n + 3));
+                n += 3;
+            }
+            else {
+                printf("SSE4 inefficiency\n");
                 nonce(addr,(i + n), (uint64_t)(i - startnonce + n));
-        } else if(selecttype == 2) {
-            if (n + 8 < noncesperthread)
-                {
-                    m256nonce(addr,
-                              (i + n + 0), (i + n + 1), (i + n + 2), (i + n + 3),
-                              (i + n + 4), (i + n + 5), (i + n + 6), (i + n + 7),
-                              (uint64_t)(i - startnonce + n + 0),
-                              (uint64_t)(i - startnonce + n + 1),
-                              (uint64_t)(i - startnonce + n + 2),
-                              (uint64_t)(i - startnonce + n + 3),
-                              (uint64_t)(i - startnonce + n + 4),
-                              (uint64_t)(i - startnonce + n + 5),
-                              (uint64_t)(i - startnonce + n + 6),
-                              (uint64_t)(i - startnonce + n + 7));
-
-                    n += 7;
-                } else
-                nonce(addr,(i + n), (uint64_t)(i - startnonce + n));
-        } else {
-            nonce(addr,(i + n), (uint64_t)(i - startnonce + n));
+            }
+        }
+        else if (selecttype == 2) { // AVX2
+            if (n + 8 <= noncesperthread) {
+                m256nonce(addr,
+                          (i + n + 0), (i + n + 1), (i + n + 2), (i + n + 3),
+                          (i + n + 4), (i + n + 5), (i + n + 6), (i + n + 7),
+                          (uint64_t)(i - startnonce + n + 0),
+                          (uint64_t)(i - startnonce + n + 1),
+                          (uint64_t)(i - startnonce + n + 2),
+                          (uint64_t)(i - startnonce + n + 3),
+                          (uint64_t)(i - startnonce + n + 4),
+                          (uint64_t)(i - startnonce + n + 5),
+                          (uint64_t)(i - startnonce + n + 6),
+                          (uint64_t)(i - startnonce + n + 7));
+                
+                n += 7;
+            }
+            else {
+                printf("AVX2 inefficiency\n");
+                nonce(addr, (i + n), (uint64_t)(i - startnonce + n));
+            }
+        }
+        else { // STANDARD
+            nonce(addr, (i + n), (uint64_t)(i - startnonce + n));
         }
     }
 
     return NULL;
 }
 
-uint64_t getMS() {
+// }}}
+// {{{ getMS
+
+uint64_t
+getMS() {
     struct timeval time;
     gettimeofday(&time, NULL);
     return ((uint64_t)time.tv_sec * 1000000) + time.tv_usec;
 }
+
+// }}}
+// {{{ usage
 
 void usage(char **argv) {
     printf("Usage: %s -k KEY [ -x CORE ] [-d DIRECTORY] [-s STARTNONCE] [-n NONCES] [-m STAGGERSIZE] [-t THREADS] -a\n", argv[0]);
@@ -318,22 +340,27 @@ void usage(char **argv) {
     exit(-1);
 }
 
-void *writecache(void *arguments) {
+// }}}
+// {{{ writecache
+
+void *
+writecache(void *arguments) {
     uint64_t cacheblocksize = staggersize * SCOOP_SIZE;
     uint64_t thisnonce;
     int percent;
 
     percent = (int)(100 * lastrun / nonces);
 
-    if(asyncmode == 1) {
+    if (asyncmode == 1) {
         printf("\33[2K\r%i Percent done. (ASYNC write)", percent);
         fflush(stdout);
-    } else {
+    }
+    else {
         printf("\33[2K\r%i Percent done. (write)", percent);
         fflush(stdout);
     }
 
-    for ( thisnonce=0; thisnonce < NUM_SCOOPS; thisnonce++ ) {
+    for (thisnonce = 0; thisnonce < NUM_SCOOPS; thisnonce++ ) {
         uint64_t cacheposition = thisnonce * cacheblocksize;
         uint64_t fileposition  = (uint64_t)(thisnonce * (uint64_t)nonces * (uint64_t)SCOOP_SIZE + thisrun * (uint64_t)SCOOP_SIZE);
         if ( lseek64(ofd, fileposition, SEEK_SET) < 0 ) {
@@ -361,16 +388,9 @@ void *writecache(void *arguments) {
     return NULL;
 }
 
-int fileexists(const char *filename) {
-    int fd = open(filename, O_RDONLY);
+// }}}
 
-    if ( fd < 0 ) {
-        close(fd);
-        return 1;
-    }
-    
-    return 0;
-}
+// {{{ main
 
 int main(int argc, char **argv) {
     if(argc < 2) 
@@ -378,13 +398,13 @@ int main(int argc, char **argv) {
 
     int i;
     int startgiven = 0;
-    for(i = 1; i < argc; i++) {
+    for (i = 1; i < argc; i++) {
         // Ignore unknown argument
         if(argv[i][0] != '-')
             continue;
 
-        if(!strcmp(argv[i],"-a")) {
-            asyncmode=1;
+        if (!strcmp(argv[i],"-a")) {
+            asyncmode = 1;
             printf("Async mode set.\n");
             continue;
         }
@@ -394,13 +414,14 @@ int main(int argc, char **argv) {
         char param = argv[i][1];
         int modified, ds;
 
-        if(argv[i][2] == 0) {
-            if(i < argc - 1)
+        if (argv[i][2] == 0) {
+            if (i < argc - 1)
                 parse = argv[++i];
-        } else {
+        }
+        else {
             parse = &(argv[i][2]);
         }
-        if(parse != NULL) {
+        if (parse != NULL) {
             modified = 0;
             parsed = strtoull(parse, 0, 10);
             switch(parse[strlen(parse) - 1]) {
@@ -427,16 +448,18 @@ int main(int argc, char **argv) {
                 startgiven = 1;
                 break;
             case 'n':
-                if(modified == 1) {
+                if (modified == 1) {
                     nonces = (uint64_t)(parsed / NONCE_SIZE);
-                } else {
+                }
+                else {
                     nonces = parsed;
                 }       
                 break;
             case 'm':
-                if(modified == 1) {
+                if (modified == 1) {
                     staggersize = (uint64_t)(parsed / NONCE_SIZE);
-                } else {
+                }
+                else {
                     staggersize = parsed;
                 }       
                 break;
@@ -451,10 +474,11 @@ int main(int argc, char **argv) {
                 outputdir = (char*) malloc(ds + 2);
                 memcpy(outputdir, parse, ds);
                 // Add final slash?
-                if(outputdir[ds - 1] != '/') {
+                if (outputdir[ds - 1] != '/') {
                     outputdir[ds] = '/';
                     outputdir[ds + 1] = 0;
-                } else {
+                }
+                else {
                     outputdir[ds] = 0;
                 }
                                         
@@ -462,31 +486,30 @@ int main(int argc, char **argv) {
         }
     }
 
-    if(selecttype == 1) printf("Using SSE2 core.\n");
-    else if(selecttype == 2) printf("Using AVX2 core.\n");
-    else {
-        printf("Using original algorithm.\n");
-        selecttype=0;
+    if (selecttype == 1)      printf("Using SSE2 core.\n");
+    else if (selecttype == 2) printf("Using AVX2 core.\n");
+    else {                    printf("Using ORIG core.\n");
+      selecttype = 0;
     }
 
-    if(addr == 0)
+    if (addr == 0)
         usage(argv);
 
     // Autodetect threads
-    if(threads == 0)
+    if (threads == 0)
         threads = getNumberOfCores();
 
     // No startnonce given: Just pick random one
-    if(startgiven == 0) {
+    if (startgiven == 0) {
         // Just some randomness
         srand(time(NULL));
         startnonce = (uint64_t)rand() * (1 << 30) + rand();
     }
 
     // No nonces given: use whole disk
-    if(nonces == 0) {
-        uint64_t fs = freespace(outputdir);
-        if(fs <= FREE_SPACE) {
+    if (nonces == 0) {
+      uint64_t fs = freespace(outputdir);
+        if (fs <= FREE_SPACE) {
             printf("Not enough free space on device\n");
             exit(-1);
         }
@@ -497,16 +520,16 @@ int main(int argc, char **argv) {
 
     // Autodetect stagger size
     if (staggersize == 0) {
-        // use 80% of memory
-        uint64_t memstag = (freemem() * 0.8) / NONCE_SIZE;
+      uint64_t memstag = (freemem() * 0.8) / NONCE_SIZE; // use 80% of memory
 
-        if(nonces < memstag) {
-            // Small stack: all at once
+
+        if (nonces < memstag) {         // Small stack: all at once
             staggersize = nonces;
-        } else {
-            // Determine stagger that (almost) fits nonces
-            for(i = memstag; i >= 1000; i--) {
-                if( (nonces % i) < 1000) {
+        }
+        else {                          // Determine stagger that (almost) fits nonces
+            
+            for (i = memstag; i >= 1000; i--) {
+                if ((nonces % i) < 1000) {
                     staggersize = i;
                     nonces-= (nonces % i);
                     i = 0;
@@ -515,16 +538,8 @@ int main(int argc, char **argv) {
         }
     }
 
-    // 32 Bit and above 4GB?
-    if( sizeof( void* ) < 8 ) {
-        if( staggersize > 15000 ) {
-            printf("Cant use stagger sizes above 15000 with 32-bit version\n");
-            exit(-1);
-        }
-    }
-
     // Adjust according to stagger size
-    if(nonces % staggersize != 0) {
+    if (nonces % staggersize != 0) {
         nonces -= nonces % staggersize;
         nonces += staggersize;
         printf("Adjusting total nonces to %u to match stagger size\n", nonces);
@@ -533,17 +548,17 @@ int main(int argc, char **argv) {
     printf("Creating plots for nonces %" PRIu64 " to %" PRIu64 " (%u GB) using %u MB memory and %u threads\n",
            startnonce, (startnonce + nonces), (uint32_t)(nonces / 4 / 953), (uint32_t)(staggersize / 4 * (1 + asyncmode)), threads);
 
-    // Comment this out/change it if you really want more than 200 Threads
-    if(threads > 200) {
+    // Comment this out/change it if you really want more than 128 Threads
+    if (threads > 128) {
         printf("%u threads? Sure?\n", threads);
         exit(-1);
     }
 
-    if(asyncmode == 1) {
+    if (asyncmode == 1) {
         acache[0] = calloc( NONCE_SIZE, staggersize );
         acache[1] = calloc( NONCE_SIZE, staggersize );
 
-        if(acache[0] == NULL || acache[1] == NULL) {
+        if (acache[0] == NULL || acache[1] == NULL) {
             printf("Error allocating memory. Try lower stagger size or removing ASYNC mode.\n");
             exit(-1);
         }
@@ -551,7 +566,7 @@ int main(int argc, char **argv) {
     else {
         cache = calloc( NONCE_SIZE, staggersize );
 
-        if(cache == NULL) {
+        if (cache == NULL) {
             printf("Error allocating memory. Try lower stagger size.\n");
             exit(-1);
         }
@@ -564,9 +579,7 @@ int main(int argc, char **argv) {
     sprintf(name, "%s%"PRIu64"_%"PRIu64"_%u_%u.plotting", outputdir, addr, startnonce, nonces, nonces);
     sprintf(finalname, "%s%"PRIu64"_%"PRIu64"_%u_%u", outputdir, addr, startnonce, nonces, nonces);
 
-    //    if ( fileexists(name) ) {
-    unlink(name);
-    //    }
+    unlink(name); // no need to see if file exists: unlink can handle that
 
     ofd = open(name, O_CREAT | O_LARGEFILE | O_RDWR, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
     if (ofd < 0) {
@@ -587,7 +600,7 @@ int main(int argc, char **argv) {
     // Threads:
     noncesperthread = (uint64_t)(staggersize / threads);
 
-    if(noncesperthread == 0) {
+    if (noncesperthread == 0) {
         threads = staggersize;
         noncesperthread = 1;
     }
@@ -612,13 +625,11 @@ int main(int argc, char **argv) {
             }
         }
 
-        // Wait for Threads to finish;
-        for (i = 0; i < threads; i++) {
+        for (i = 0; i < threads; i++) {           // Wait for Threads to finish;
             pthread_join(worker[i], NULL);
         }
-                
-        // Run leftover nonces
-        for (i = threads * noncesperthread; i < staggersize; i++)
+
+        for (i = threads * noncesperthread; i < staggersize; i++)     // Run leftover nonces
             nonce(addr, startnonce + i, (uint64_t)i);
 
         // Write plot to disk:
@@ -638,7 +649,7 @@ int main(int argc, char **argv) {
         else {
             thisrun = run;
             lastrun = run + staggersize;
-            if(pthread_create(&writeworker, NULL, writecache, (void *)NULL)) {
+            if (pthread_create(&writeworker, NULL, writecache, (void *)NULL)) {
                 printf("Error creating thread. Out of memory? Try lower stagger size / less threads\n");
                 exit(-1);
             }
@@ -654,9 +665,7 @@ int main(int argc, char **argv) {
 
     printf("\nFinished plotting; renaming file...\n");
 
-    //if ( fileexists(finalname) ) {
     unlink(finalname);
-    //}
 
     if ( rename(name, finalname) < 0 ) {
         printf("Error while renaming file: %d\n", errno);
@@ -666,3 +675,4 @@ int main(int argc, char **argv) {
     return 0;
 }
 
+// }}}
