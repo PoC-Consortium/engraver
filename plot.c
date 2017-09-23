@@ -420,16 +420,16 @@ int main(int argc, char **argv) {
             switch(parse[strlen(parse) - 1]) {
             case 't':
             case 'T':
-                parsed *= 1000;
+                parsed *= 1024;
             case 'g':
             case 'G':
-                parsed *= 1000;
+                parsed *= 1024;
             case 'm':
             case 'M':
-                parsed *= 1000;
+                parsed *= 1024;
             case 'k':
             case 'K':
-                parsed *= 1000;
+                parsed *= 1024;
                 modified = 1;
             }
             switch(param) {

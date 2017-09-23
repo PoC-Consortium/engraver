@@ -54,7 +54,7 @@ rico666 <bots@cryptoguru.org>                 (Don't donate)
   -n <nonces>
     The number of nonces to plot. Each nonce is 256KB in size. If you do not
     give the number of nonces, the program will try to plot the maximum number
-    of nonces that ar epossible according to the free disk space where
+    of nonces that are possible according to the free disk space where
     <directory> resides.
     
   -s <startnonce>
@@ -73,7 +73,7 @@ rico666 <bots@cryptoguru.org>                 (Don't donate)
       1 - SSE4 core
       2 - AVX2 core
     Of course, SSE4 and AVX2 will work only on CPU architectures supporting
-    these instruction sets. Otherwise the program will throw an "illegal exception"
+    these instruction sets. Otherwise the program will throw an "illegal instruction"
     error. You can assume a roughly 2x speed increase default->SSE4->AVX2 with
     AVX2 being roughly 4x faster than default. See also "Notes" below!
 
@@ -95,6 +95,12 @@ number of nonces to plot will match the number of threads like this:
 If you do not match these numbers, the plotter will fall back to default core for nonces
 that are not multiple of 4 or 8 respectively.
 
+For <startnonce>, <staggersize> and <nonces> you can either define just a number or
+add the T/t, G/g, M/m or K/k suffix. E.g. "-s 1234k"
+* K/k = 1024
+* M/m = 1024<sup>2</sup>
+* G/g = 1024<sup>3</sup>
+* T/t = 1024<sup>4</sup>
 
 ### TODO:
 
