@@ -95,7 +95,7 @@ number of nonces to plot will match the number of threads like this:
 If you do not match these numbers, the plotter will fall back to default core for nonces
 that are not multiple of 4 or 8 respectively.
 
-For <startnonce>, <staggersize> and <nonces> you can either define just a number or
+For \<startnonce>, \<staggersize> and \<nonces> you can either define just a number or
 add the T/t, G/g, M/m or K/k suffix. E.g. "-s 1234k"
 * K/k = 1024
 * M/m = 1024<sup>2</sup>

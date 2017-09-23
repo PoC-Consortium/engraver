@@ -150,9 +150,6 @@ extern "C" {
    * function does NOT imply a hidden call to mshabal256_init().
    */
   void mshabal256_close(mshabal256_context *sc,
-    unsigned ub0, unsigned ub1, unsigned ub2, unsigned ub3,
-    unsigned ub4, unsigned ub5, unsigned ub6, unsigned ub7,
-    unsigned n,
     void *dst0, void *dst1, void *dst2, void *dst3,
     void *dst4, void *dst5, void *dst6, void *dst7);
 
