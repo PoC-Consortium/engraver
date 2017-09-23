@@ -118,16 +118,9 @@ mnonce(uint64_t addr,
     char final1[32], final2[32], final3[32], final4[32];
     char gendata1[16 + NONCE_SIZE], gendata2[16 + NONCE_SIZE], gendata3[16 + NONCE_SIZE], gendata4[16 + NONCE_SIZE];
 
-    char *xv = (char*)&addr;
+    char *xv;
 
-    gendata1[NONCE_SIZE]     = xv[7];
-    gendata1[NONCE_SIZE + 1] = xv[6];
-    gendata1[NONCE_SIZE + 2] = xv[5];
-    gendata1[NONCE_SIZE + 3] = xv[4];
-    gendata1[NONCE_SIZE + 4] = xv[3];
-    gendata1[NONCE_SIZE + 5] = xv[2];
-    gendata1[NONCE_SIZE + 6] = xv[1];
-    gendata1[NONCE_SIZE + 7] = xv[0];
+    SET_NONCE(gendata1, addr,  0);
 
     for (int i = NONCE_SIZE; i <= NONCE_SIZE + 7; ++i) {
         gendata2[i] = gendata1[i];
@@ -141,9 +134,9 @@ mnonce(uint64_t addr,
     SET_NONCE(gendata4, nonce4, 8);
 
     mshabal_context x;
-    int i, len;
+    int len;
 
-    for (i = NONCE_SIZE; i > 0; i -= HASH_SIZE) {
+    for (int i = NONCE_SIZE; i > 0; i -= HASH_SIZE) {
       sse4_mshabal_init(&x, 256);
 
       len = NONCE_SIZE + 16 - i;
@@ -159,7 +152,7 @@ mnonce(uint64_t addr,
     sse4_mshabal_close(&x, 0, 0, 0, 0, 0, final1, final2, final3, final4);
 
     // XOR with final
-    for (i = 0; i < NONCE_SIZE; i++) {
+    for (int i = 0; i < NONCE_SIZE; i++) {
         gendata1[i] ^= (final1[i % 32]);
         gendata2[i] ^= (final2[i % 32]);
         gendata3[i] ^= (final3[i % 32]);
@@ -167,7 +160,7 @@ mnonce(uint64_t addr,
     }
 
     // Sort them:
-    for (i = 0; i < NONCE_SIZE; i += 64) {
+    for (int i = 0; i < NONCE_SIZE; i += 64) {
         memmove(&cache[cachepos1 * 64 + (uint64_t)i * staggersize], &gendata1[i], 64);
         memmove(&cache[cachepos2 * 64 + (uint64_t)i * staggersize], &gendata2[i], 64);
         memmove(&cache[cachepos3 * 64 + (uint64_t)i * staggersize], &gendata3[i], 64);
@@ -190,10 +183,9 @@ int m256nonce(uint64_t addr,
     char gendata1[16 + NONCE_SIZE], gendata2[16 + NONCE_SIZE], gendata3[16 + NONCE_SIZE], gendata4[16 + NONCE_SIZE];
     char gendata5[16 + NONCE_SIZE], gendata6[16 + NONCE_SIZE], gendata7[16 + NONCE_SIZE], gendata8[16 + NONCE_SIZE];
 
-    char *xv = (char*)&addr;
+    char *xv;
 
-    gendata1[NONCE_SIZE]     = xv[7]; gendata1[NONCE_SIZE + 1] = xv[6]; gendata1[NONCE_SIZE + 2] = xv[5]; gendata1[NONCE_SIZE + 3] = xv[4];
-    gendata1[NONCE_SIZE + 4] = xv[3]; gendata1[NONCE_SIZE + 5] = xv[2]; gendata1[NONCE_SIZE + 6] = xv[1]; gendata1[NONCE_SIZE + 7] = xv[0];
+    SET_NONCE(gendata1, addr,  0);
 
     for (int i = NONCE_SIZE; i <= NONCE_SIZE + 7; ++i) {
       gendata2[i] = gendata1[i];
@@ -334,7 +326,7 @@ void usage(char **argv) {
     printf("Usage: %s -k KEY [ -x CORE ] [-d DIRECTORY] [-s STARTNONCE] [-n NONCES] [-m STAGGERSIZE] [-t THREADS] -a\n", argv[0]);
     printf("   CORE:\n");
     printf("     0 - default core\n");
-    printf("     1 - SSE2 core\n");
+    printf("     1 - SSE4 core\n");
     printf("     2 - AVX2 core\n");
     printf("   -a = ASYNC writer mode (will use 2x memory!)\n");
     exit(-1);
@@ -393,12 +385,13 @@ writecache(void *arguments) {
 // {{{ main
 
 int main(int argc, char **argv) {
-    if(argc < 2) 
+    if (argc < 2) {
         usage(argv);
-
+    }
+    
     int i;
     int startgiven = 0;
-    for (i = 1; i < argc; i++) {
+    for (uint8_t i = 1; i < argc; i++) {
         // Ignore unknown argument
         if(argv[i][0] != '-')
             continue;
@@ -486,7 +479,7 @@ int main(int argc, char **argv) {
         }
     }
 
-    if (selecttype == 1)      printf("Using SSE2 core.\n");
+    if (selecttype == 1)      printf("Using SSE4 core.\n");
     else if (selecttype == 2) printf("Using AVX2 core.\n");
     else {                    printf("Using ORIG core.\n");
       selecttype = 0;
