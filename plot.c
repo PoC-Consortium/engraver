@@ -70,7 +70,6 @@ char *outputdir = DEFAULTDIR;
 void nonce(uint64_t addr, uint64_t nonce, uint64_t cachepos) {
     char final[32];
     char gendata[16 + NONCE_SIZE];
-//    printf("Hallo\n");
     char *xv;
         
     SET_NONCE(gendata, addr,  0);
@@ -173,11 +172,11 @@ mnonce(uint64_t addr,
 // }}}
 // {{{ m256nonce         AVX2 version
 
-int m256nonce(uint64_t addr,
-              uint64_t nonce1, uint64_t nonce2, uint64_t nonce3, uint64_t nonce4,
-              uint64_t nonce5, uint64_t nonce6, uint64_t nonce7, uint64_t nonce8,
-              uint64_t cachepos1, uint64_t cachepos2, uint64_t cachepos3, uint64_t cachepos4,
-              uint64_t cachepos5, uint64_t cachepos6, uint64_t cachepos7, uint64_t cachepos8) {
+int
+m256nonce(uint64_t addr,
+          uint64_t nonce1, uint64_t nonce2, uint64_t nonce3, uint64_t nonce4,
+          uint64_t nonce5, uint64_t nonce6, uint64_t nonce7, uint64_t nonce8,
+          uint64_t cachepos) {
     char final1[32], final2[32], final3[32], final4[32];
     char final5[32], final6[32], final7[32], final8[32];
     char gendata1[16 + NONCE_SIZE], gendata2[16 + NONCE_SIZE], gendata3[16 + NONCE_SIZE], gendata4[16 + NONCE_SIZE];
@@ -197,8 +196,6 @@ int m256nonce(uint64_t addr,
       gendata8[i] = gendata1[i];
     }
 
-    xv = (char*)&nonce1;
-
     SET_NONCE(gendata1, nonce1, 8);
     SET_NONCE(gendata2, nonce2, 8);
     SET_NONCE(gendata3, nonce3, 8);
@@ -209,10 +206,10 @@ int m256nonce(uint64_t addr,
     SET_NONCE(gendata8, nonce8, 8);
 
     mshabal256_context x;
-    int i, len;
+    int len;
 
-    for (i = NONCE_SIZE; i > 0;) {
-      mshabal256_init(&x, 256);
+    for (int i = NONCE_SIZE; i;) {
+      mshabal256_init(&x);
 
       len = NONCE_SIZE + 16 - i;
       if (len > HASH_CAP)
@@ -227,34 +224,34 @@ int m256nonce(uint64_t addr,
 
     }
 
-    mshabal256_init(&x, 256);
+    mshabal256_init(&x);
     mshabal256(&x, gendata1, gendata2, gendata3, gendata4, gendata5, gendata6, gendata7, gendata8, 16 + NONCE_SIZE);
     mshabal256_close(&x,
                      (uint32_t *)final1, (uint32_t *)final2, (uint32_t *)final3, (uint32_t *)final4,
                      (uint32_t *)final5, (uint32_t *)final6, (uint32_t *)final7, (uint32_t *)final8);
 
     // XOR with final
-    for (i = 0; i < NONCE_SIZE; i++) {
-      gendata1[i] ^= (final1[i % 32]);
-      gendata2[i] ^= (final2[i % 32]);
-      gendata3[i] ^= (final3[i % 32]);
-      gendata4[i] ^= (final4[i % 32]);
-      gendata5[i] ^= (final5[i % 32]);
-      gendata6[i] ^= (final6[i % 32]);
-      gendata7[i] ^= (final7[i % 32]);
-      gendata8[i] ^= (final8[i % 32]);
+    for (int i = 0; i < NONCE_SIZE; i++) {
+      gendata1[i] ^= final1[i % 32];
+      gendata2[i] ^= final2[i % 32];
+      gendata3[i] ^= final3[i % 32];
+      gendata4[i] ^= final4[i % 32];
+      gendata5[i] ^= final5[i % 32];
+      gendata6[i] ^= final6[i % 32];
+      gendata7[i] ^= final7[i % 32];
+      gendata8[i] ^= final8[i % 32];
     }
 
     // Sort them:
-    for (i = 0; i < NONCE_SIZE; i += 64) {
-      memmove(&cache[cachepos1 * 64 + (uint64_t)i * staggersize], &gendata1[i], 64);
-      memmove(&cache[cachepos2 * 64 + (uint64_t)i * staggersize], &gendata2[i], 64);
-      memmove(&cache[cachepos3 * 64 + (uint64_t)i * staggersize], &gendata3[i], 64);
-      memmove(&cache[cachepos4 * 64 + (uint64_t)i * staggersize], &gendata4[i], 64);
-      memmove(&cache[cachepos5 * 64 + (uint64_t)i * staggersize], &gendata5[i], 64);
-      memmove(&cache[cachepos6 * 64 + (uint64_t)i * staggersize], &gendata6[i], 64);
-      memmove(&cache[cachepos7 * 64 + (uint64_t)i * staggersize], &gendata7[i], 64);
-      memmove(&cache[cachepos8 * 64 + (uint64_t)i * staggersize], &gendata8[i], 64);
+    for (int i = 0; i < NONCE_SIZE; i += 64) {
+      memmove(&cache[cachepos * 64 +       (uint64_t)i * staggersize], &gendata1[i], 64);
+      memmove(&cache[cachepos * 64 +  64 + (uint64_t)i * staggersize], &gendata2[i], 64);
+      memmove(&cache[cachepos * 64 + 128 + (uint64_t)i * staggersize], &gendata3[i], 64);
+      memmove(&cache[cachepos * 64 + 192 + (uint64_t)i * staggersize], &gendata4[i], 64);
+      memmove(&cache[cachepos * 64 + 256 + (uint64_t)i * staggersize], &gendata5[i], 64);
+      memmove(&cache[cachepos * 64 + 320 + (uint64_t)i * staggersize], &gendata6[i], 64);
+      memmove(&cache[cachepos * 64 + 384 + (uint64_t)i * staggersize], &gendata7[i], 64);
+      memmove(&cache[cachepos * 64 + 448 + (uint64_t)i * staggersize], &gendata8[i], 64);
     }
 
     return 0;
@@ -264,49 +261,38 @@ int m256nonce(uint64_t addr,
 
 void *
 work_i(void *x_void_ptr) {
-    uint64_t *x_ptr = (uint64_t *)x_void_ptr;
-    uint64_t i = *x_ptr;
-    
+    uint64_t i = *(uint64_t *)x_void_ptr;
+
     uint32_t n;
-    for (n = 0; n < noncesperthread; n++) {
-        if (selecttype == 1) { // SSE4
-            if (n + 4 <= noncesperthread) {
-                mnonce(addr,
-                       (i + n + 0), (i + n + 1), (i + n + 2), (i + n + 3),
-                       (uint64_t)(i - startnonce + n + 0),
-                       (uint64_t)(i - startnonce + n + 1),
-                       (uint64_t)(i - startnonce + n + 2),
-                       (uint64_t)(i - startnonce + n + 3));
-                n += 3;
-            }
-            else {
-                printf("SSE4 inefficiency\n");
-                nonce(addr,(i + n), (uint64_t)(i - startnonce + n));
-            }
+
+    if (selecttype == 2) { // AVX2
+        for (n = 0; n < noncesperthread; n += 8) {            
+            m256nonce(addr,
+                      (i + n + 0), (i + n + 1), (i + n + 2), (i + n + 3),
+                      (i + n + 4), (i + n + 5), (i + n + 6), (i + n + 7),
+                      (i - startnonce + n));
         }
-        else if (selecttype == 2) { // AVX2
-            if (n + 8 <= noncesperthread) {
-                m256nonce(addr,
-                          (i + n + 0), (i + n + 1), (i + n + 2), (i + n + 3),
-                          (i + n + 4), (i + n + 5), (i + n + 6), (i + n + 7),
-                          (uint64_t)(i - startnonce + n + 0),
-                          (uint64_t)(i - startnonce + n + 1),
-                          (uint64_t)(i - startnonce + n + 2),
-                          (uint64_t)(i - startnonce + n + 3),
-                          (uint64_t)(i - startnonce + n + 4),
-                          (uint64_t)(i - startnonce + n + 5),
-                          (uint64_t)(i - startnonce + n + 6),
-                          (uint64_t)(i - startnonce + n + 7));
-                
-                n += 7;
+    }
+    else {
+        for (n = 0; n < noncesperthread; n++) {
+            if (selecttype == 1) { // SSE4
+                if (n + 4 <= noncesperthread) {
+                    mnonce(addr,
+                           (i + n), (i + n + 1), (i + n + 2), (i + n + 3),
+                           (uint64_t)(i - startnonce + n),
+                           (uint64_t)(i - startnonce + n + 1),
+                           (uint64_t)(i - startnonce + n + 2),
+                           (uint64_t)(i - startnonce + n + 3));
+                    n += 3;
+                }
+                else {
+                    printf("SSE4 inefficiency\n");
+                    nonce(addr,(i + n), (uint64_t)(i - startnonce + n));
+                }
             }
-            else {
-                printf("AVX2 inefficiency\n");
+            else { // STANDARD
                 nonce(addr, (i + n), (uint64_t)(i - startnonce + n));
             }
-        }
-        else { // STANDARD
-            nonce(addr, (i + n), (uint64_t)(i - startnonce + n));
         }
     }
 
@@ -327,12 +313,8 @@ getMS() {
 // {{{ usage
 
 void usage(char **argv) {
-    printf("Usage: %s -k KEY [ -x CORE ] [-d DIRECTORY] [-s STARTNONCE] [-n NONCES] [-m STAGGERSIZE] [-t THREADS] -a\n", argv[0]);
-    printf("   CORE:\n");
-    printf("     0 - default core\n");
-    printf("     1 - SSE4 core\n");
-    printf("     2 - AVX2 core\n");
-    printf("   -a = ASYNC writer mode (will use 2x memory!)\n");
+    printf("Usage: %s -k KEY [ -x CORE ] [-d DIRECTORY] [-s STARTNONCE] [-n NONCES] [-m STAGGERSIZE] [-t THREADS] -a\n\n", argv[0]);
+    printf("   see README.md\n");
     exit(-1);
 }
 
@@ -483,10 +465,18 @@ int main(int argc, char **argv) {
         }
     }
 
-    if (selecttype == 1)      printf("Using SSE4 core.\n");
-    else if (selecttype == 2) printf("Using AVX2 core.\n");
+    if (selecttype == 1)      {
+        printf("Using SSE4 core.\n");
+    }
+    else if (selecttype == 2) {
+        printf("Using AVX2 core.\n");
+        if (nonces % (threads * 8)) {
+            printf("Number of nonces not divisible by threads * 8\n");
+            exit(-1);
+        }
+    }
     else {                    printf("Using ORIG core.\n");
-      selecttype = 0;
+        selecttype = 0;
     }
 
     if (addr == 0)

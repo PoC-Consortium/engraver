@@ -43,7 +43,7 @@ mshabal256_compress(mshabal256_context *sc,
                     const uint8_t *buf6, const uint8_t *buf7,
                     size_t num) {
     union {
-        uint32_t words[64 * MSHABAL256_FACTOR];
+        uint32_t words[128];
         __m256i data[16];
     } u;
     __m256i A[12], B[16], C[16];
@@ -67,8 +67,8 @@ mshabal256_compress(mshabal256_context *sc,
 #define M(i)   _mm256_load_si256(u.data + (i))
 
     while (num--) {
-        for (uint8_t j = 0; j < 64 * MSHABAL256_FACTOR; j += 4 * MSHABAL256_FACTOR) {
-            size_t o = j / MSHABAL256_FACTOR;
+        uint8_t o = 0;
+        for (uint8_t j = 0; j < 128; j += 8, o += 4) {
             u.words[j + 0] = *(uint32_t *)(buf0 + o);
             u.words[j + 1] = *(uint32_t *)(buf1 + o);
             u.words[j + 2] = *(uint32_t *)(buf2 + o);
@@ -250,11 +250,11 @@ mshabal256_compress(mshabal256_context *sc,
 }
 
 void
-mshabal256_init(mshabal256_context *sc, unsigned out_size) {
+mshabal256_init(mshabal256_context *sc) {
     unsigned u;
     
-    for (u = 0; u < (12 + 16 + 16) * 4 * MSHABAL256_FACTOR; u++)
-        sc->state[u] = 0;
+    memset(sc->state, 0, 1408);
+    
     memset(sc->buf0, 0, sizeof sc->buf0);
     memset(sc->buf1, 0, sizeof sc->buf1);
     memset(sc->buf2, 0, sizeof sc->buf2);
@@ -264,46 +264,49 @@ mshabal256_init(mshabal256_context *sc, unsigned out_size) {
     memset(sc->buf6, 0, sizeof sc->buf6);
     memset(sc->buf7, 0, sizeof sc->buf7);
     for (u = 0; u < 16; u++) {
-        sc->buf0[4 * u + 0] = (out_size + u);
-        sc->buf0[4 * u + 1] = (out_size + u) >> 8;
-        sc->buf1[4 * u + 0] = (out_size + u);
-        sc->buf1[4 * u + 1] = (out_size + u) >> 8;
-        sc->buf2[4 * u + 0] = (out_size + u);
-        sc->buf2[4 * u + 1] = (out_size + u) >> 8;
-        sc->buf3[4 * u + 0] = (out_size + u);
-        sc->buf3[4 * u + 1] = (out_size + u) >> 8;
-        sc->buf4[4 * u + 0] = (out_size + u);
-        sc->buf4[4 * u + 1] = (out_size + u) >> 8;
-        sc->buf5[4 * u + 0] = (out_size + u);
-        sc->buf5[4 * u + 1] = (out_size + u) >> 8;
-        sc->buf6[4 * u + 0] = (out_size + u);
-        sc->buf6[4 * u + 1] = (out_size + u) >> 8;
-        sc->buf7[4 * u + 0] = (out_size + u);
-        sc->buf7[4 * u + 1] = (out_size + u) >> 8;
+        uint8_t idx = u * 4;
+        sc->buf0[idx] = 256 + u;
+        sc->buf1[idx] = 256 + u;
+        sc->buf2[idx] = 256 + u;
+        sc->buf3[idx] = 256 + u;
+        sc->buf4[idx] = 256 + u;
+        sc->buf5[idx] = 256 + u;
+        sc->buf6[idx] = 256 + u;
+        sc->buf7[idx] = 256 + u;
+        idx++;
+        sc->buf0[idx] = 1;
+        sc->buf1[idx] = 1;
+        sc->buf2[idx] = 1;
+        sc->buf3[idx] = 1;
+        sc->buf4[idx] = 1;
+        sc->buf5[idx] = 1;
+        sc->buf6[idx] = 1;
+        sc->buf7[idx] = 1;
     }
     sc->Whigh = sc->Wlow = C32(0xFFFFFFFF);
     mshabal256_compress(sc, sc->buf0, sc->buf1, sc->buf2, sc->buf3, sc->buf4, sc->buf5, sc->buf6, sc->buf7, 1);
     for (u = 0; u < 16; u++) {
-        sc->buf0[4 * u + 0] = (out_size + u + 16);
-        sc->buf0[4 * u + 1] = (out_size + u + 16) >> 8;
-        sc->buf1[4 * u + 0] = (out_size + u + 16);
-        sc->buf1[4 * u + 1] = (out_size + u + 16) >> 8;
-        sc->buf2[4 * u + 0] = (out_size + u + 16);
-        sc->buf2[4 * u + 1] = (out_size + u + 16) >> 8;
-        sc->buf3[4 * u + 0] = (out_size + u + 16);
-        sc->buf3[4 * u + 1] = (out_size + u + 16) >> 8;
-        sc->buf4[4 * u + 0] = (out_size + u + 16);
-        sc->buf4[4 * u + 1] = (out_size + u + 16) >> 8;
-        sc->buf5[4 * u + 0] = (out_size + u + 16);
-        sc->buf5[4 * u + 1] = (out_size + u + 16) >> 8;
-        sc->buf6[4 * u + 0] = (out_size + u + 16);
-        sc->buf6[4 * u + 1] = (out_size + u + 16) >> 8;
-        sc->buf7[4 * u + 0] = (out_size + u + 16);
-        sc->buf7[4 * u + 1] = (out_size + u + 16) >> 8;
+        uint8_t idx = u * 4;
+        sc->buf0[idx] = 272 + u;
+        sc->buf1[idx] = 272 + u;
+        sc->buf2[idx] = 272 + u;
+        sc->buf3[idx] = 272 + u;
+        sc->buf4[idx] = 272 + u;
+        sc->buf5[idx] = 272 + u;
+        sc->buf6[idx] = 272 + u;
+        sc->buf7[idx] = 272 + u;
+        idx++;
+        sc->buf0[idx] = 1;
+        sc->buf1[idx] = 1;
+        sc->buf2[idx] = 1;
+        sc->buf3[idx] = 1;
+        sc->buf4[idx] = 1;
+        sc->buf5[idx] = 1;
+        sc->buf6[idx] = 1;
+        sc->buf7[idx] = 1;
     }
     mshabal256_compress(sc, sc->buf0, sc->buf1, sc->buf2, sc->buf3, sc->buf4, sc->buf5, sc->buf6, sc->buf7, 1);
     sc->ptr = 0;
-    sc->out_size = out_size;
 }
 
 /* see shabal_small.h */
@@ -312,63 +315,9 @@ mshabal256(mshabal256_context *sc,
            const void *data0, const void *data1, const void *data2, const void *data3,
            const void *data4, const void *data5, const void *data6, const void *data7,
            size_t len) {
-    size_t ptr, num;
+    size_t num;
+    size_t ptr = sc->ptr;
 
-    if (data0 == NULL) {
-        if (data1 == NULL) {
-            if (data2 == NULL) {
-                if (data3 == NULL) {
-                    if (data4 == NULL) {
-                        if (data5 == NULL) {
-                            if (data6 == NULL) {
-                                if (data7 == NULL) {
-                                    return;
-                                }
-                                else {
-                                    data0 = data7;
-                                }
-                            }
-                            else {
-                                data0 = data6;
-                            }
-                        }
-                        else {
-                            data0 = data5;
-                        }
-                    }
-                    else {
-                        data0 = data4;
-                    }
-                }
-                else {
-                    data0 = data3;
-                }
-            }
-            else {
-                data0 = data2;
-            }
-        }
-        else {
-            data0 = data1;
-        }
-    }
-
-    if (data1 == NULL)
-        data1 = data0;
-    if (data2 == NULL)
-        data2 = data0;
-    if (data3 == NULL)
-        data3 = data0;
-    if (data4 == NULL)
-      data4 = data0;
-    if (data5 == NULL)
-        data5 = data0;
-    if (data6 == NULL)
-        data6 = data0;
-    if (data7 == NULL)
-        data7 = data0;
-
-    ptr = sc->ptr;
     if (ptr != 0) {
         size_t clen;
 
@@ -408,7 +357,7 @@ mshabal256(mshabal256_context *sc,
     }
 
     num = len >> 6;
-    if (num != 0) {
+    if (num) {
         mshabal256_compress(sc, data0, data1, data2, data3, data4, data5, data6, data7, num);
         data0 = (const uint8_t *)data0 + (num << 6);
         data1 = (const uint8_t *)data1 + (num << 6);

@@ -68,35 +68,30 @@ extern "C" {
      */
 #include <stdint.h>
 
-
-#define MSHABAL256_FACTOR 2
-
-  /*
-   * The context structure for a Shabal computation. Contents are
-   * private. Such a structure should be allocated and released by
-   * the caller, in any memory area.
-   */
-  typedef struct {
-    unsigned char buf0[64];
-    unsigned char buf1[64];
-    unsigned char buf2[64];
-    unsigned char buf3[64];
-    unsigned char buf4[64];
-    unsigned char buf5[64];
-    unsigned char buf6[64];
-    unsigned char buf7[64];
-    size_t ptr;
-    uint32_t state[(12 + 16 + 16) * 4 * MSHABAL256_FACTOR];
-    uint32_t Whigh, Wlow;
-    unsigned out_size;
-  } mshabal256_context;
+    /*
+     * The context structure for a Shabal computation. Contents are
+     * private. Such a structure should be allocated and released by
+     * the caller, in any memory area.
+     */
+    typedef struct {
+        unsigned char buf0[64];
+        unsigned char buf1[64];
+        unsigned char buf2[64];
+        unsigned char buf3[64];
+        unsigned char buf4[64];
+        unsigned char buf5[64];
+        unsigned char buf6[64];
+        unsigned char buf7[64];
+        size_t ptr;
+        uint32_t state[352];
+        uint32_t Whigh, Wlow;
+    } mshabal256_context;
 
   /*
-   * Initialize a context structure. The output size must be a multiple
-   * of 32, between 32 and 512 (inclusive). The output size is expressed
-   * in bits.
+   * Initialize a context structure. The output size is assumed to be
+   * fixed to 256bit
    */
-  void mshabal256_init(mshabal256_context *sc, unsigned out_size);
+  void mshabal256_init(mshabal256_context *sc);
 
   /*
    * Process some more data bytes; four chunks of data, pointed to by
