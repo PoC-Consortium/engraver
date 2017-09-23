@@ -211,7 +211,7 @@ int m256nonce(uint64_t addr,
     mshabal256_context x;
     int i, len;
 
-    for (i = NONCE_SIZE; i > 0; i -= HASH_SIZE) {
+    for (i = NONCE_SIZE; i > 0;) {
       mshabal256_init(&x, 256);
 
       len = NONCE_SIZE + 16 - i;
@@ -219,15 +219,19 @@ int m256nonce(uint64_t addr,
         len = HASH_CAP;
 
       mshabal256(&x, &gendata1[i], &gendata2[i], &gendata3[i], &gendata4[i], &gendata5[i], &gendata6[i], &gendata7[i], &gendata8[i], len);
+
+      i -= HASH_SIZE;
       mshabal256_close(&x,
-                       &gendata1[i - HASH_SIZE], &gendata2[i - HASH_SIZE], &gendata3[i - HASH_SIZE], &gendata4[i - HASH_SIZE],
-                       &gendata5[i - HASH_SIZE], &gendata6[i - HASH_SIZE], &gendata7[i - HASH_SIZE], &gendata8[i - HASH_SIZE]);
+                       (uint32_t *)&gendata1[i], (uint32_t *)&gendata2[i], (uint32_t *)&gendata3[i], (uint32_t *)&gendata4[i],
+                       (uint32_t *)&gendata5[i], (uint32_t *)&gendata6[i], (uint32_t *)&gendata7[i], (uint32_t *)&gendata8[i]);
 
     }
 
     mshabal256_init(&x, 256);
     mshabal256(&x, gendata1, gendata2, gendata3, gendata4, gendata5, gendata6, gendata7, gendata8, 16 + NONCE_SIZE);
-    mshabal256_close(&x, final1, final2, final3, final4, final5, final6, final7, final8);
+    mshabal256_close(&x,
+                     (uint32_t *)final1, (uint32_t *)final2, (uint32_t *)final3, (uint32_t *)final4,
+                     (uint32_t *)final5, (uint32_t *)final6, (uint32_t *)final7, (uint32_t *)final8);
 
     // XOR with final
     for (i = 0; i < NONCE_SIZE; i++) {

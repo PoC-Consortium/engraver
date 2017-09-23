@@ -31,9 +31,7 @@
 #pragma warning (disable: 4146)
 #endif
 
-typedef mshabal256_u32 u32;
-
-#define C32(x)         ((u32)x ## UL)
+#define C32(x)         ((uint32_t)x ## UL)
 #define T32(x)         ((x) & C32(0xFFFFFFFF))
 #define ROTL32(x, n)   T32(((x) << (n)) | ((x) >> (32 - (n))))
 
@@ -45,7 +43,7 @@ mshabal256_compress(mshabal256_context *sc,
                     const uint8_t *buf6, const uint8_t *buf7,
                     size_t num) {
     union {
-        u32 words[64 * MSHABAL256_FACTOR];
+        uint32_t words[64 * MSHABAL256_FACTOR];
         __m256i data[16];
     } u;
     __m256i A[12], B[16], C[16];
@@ -71,14 +69,14 @@ mshabal256_compress(mshabal256_context *sc,
     while (num--) {
         for (uint8_t j = 0; j < 64 * MSHABAL256_FACTOR; j += 4 * MSHABAL256_FACTOR) {
             size_t o = j / MSHABAL256_FACTOR;
-            u.words[j + 0] = *(u32 *)(buf0 + o);
-            u.words[j + 1] = *(u32 *)(buf1 + o);
-            u.words[j + 2] = *(u32 *)(buf2 + o);
-            u.words[j + 3] = *(u32 *)(buf3 + o);
-            u.words[j + 4] = *(u32 *)(buf4 + o);
-            u.words[j + 5] = *(u32 *)(buf5 + o);
-            u.words[j + 6] = *(u32 *)(buf6 + o);
-            u.words[j + 7] = *(u32 *)(buf7 + o);
+            u.words[j + 0] = *(uint32_t *)(buf0 + o);
+            u.words[j + 1] = *(uint32_t *)(buf1 + o);
+            u.words[j + 2] = *(uint32_t *)(buf2 + o);
+            u.words[j + 3] = *(uint32_t *)(buf3 + o);
+            u.words[j + 4] = *(uint32_t *)(buf4 + o);
+            u.words[j + 5] = *(uint32_t *)(buf5 + o);
+            u.words[j + 6] = *(uint32_t *)(buf6 + o);
+            u.words[j + 7] = *(uint32_t *)(buf7 + o);
         }
 
         for (uint8_t j = 0; j < 16; j++)
@@ -435,12 +433,10 @@ mshabal256(mshabal256_context *sc,
 
 void
 mshabal256_close(mshabal256_context *sc,
-                 void *dst0, void *dst1, void *dst2, void *dst3,
-                 void *dst4, void *dst5, void *dst6, void *dst7) {
+                 uint32_t *dst0, uint32_t *dst1, uint32_t *dst2, uint32_t *dst3,
+                 uint32_t *dst4, uint32_t *dst5, uint32_t *dst6, uint32_t *dst7) {
     size_t ptr = sc->ptr;
-    size_t off;
     uint32_t z;
-    uint32_t out_size_w32;
 
     sc->buf0[ptr] = 0x80;
     sc->buf1[ptr] = 0x80;
@@ -467,56 +463,15 @@ mshabal256_close(mshabal256_context *sc,
             sc->Whigh--;
     }
 
-    out_size_w32 = sc->out_size >> 5;
-    off = MSHABAL256_FACTOR * 4 * (28 + (16 - out_size_w32));
-
-    if (dst0 != NULL) {
-        u32 *out = dst0;
-
-        for (z = 0; z < out_size_w32; z++)
-            out[z] = sc->state[off + MSHABAL256_FACTOR * (z << 2) + 0];
-    }
-    if (dst1 != NULL) {
-        u32 *out = dst1;
-
-        for (z = 0; z < out_size_w32; z++)
-            out[z] = sc->state[off + MSHABAL256_FACTOR * (z << 2) + 1];
-    }
-    if (dst2 != NULL) {
-        u32 *out = dst2;
-        
-        for (z = 0; z < out_size_w32; z++)
-            out[z] = sc->state[off + MSHABAL256_FACTOR * (z << 2) + 2];
-    }
-    if (dst3 != NULL) {
-        u32 *out = dst3;
-
-        for (z = 0; z < out_size_w32; z++)
-            out[z] = sc->state[off + MSHABAL256_FACTOR * (z << 2) + 3];
-    }
-    if (dst4 != NULL) {
-        u32 *out = dst4;
-
-        for (z = 0; z < out_size_w32; z++)
-            out[z] = sc->state[off + MSHABAL256_FACTOR * (z << 2) + 4];
-    }
-    if (dst5 != NULL) {
-        u32 *out = dst5;
-
-        for (z = 0; z < out_size_w32; z++)
-            out[z] = sc->state[off + MSHABAL256_FACTOR * (z << 2) + 5];
-    }
-    if (dst6 != NULL) {
-        u32 *out = dst6;
-
-        for (z = 0; z < out_size_w32; z++)
-            out[z] = sc->state[off + MSHABAL256_FACTOR * (z << 2) + 6];
-    }
-    if (dst7 != NULL) {
-        u32 *out = dst7;
-
-        for (z = 0; z < out_size_w32; z++)
-            out[z] = sc->state[off + MSHABAL256_FACTOR * (z << 2) + 7];
+    for (z = 0; z < 8; z++) {
+        dst0[z] = sc->state[288 + z * 8];
+        dst1[z] = sc->state[289 + z * 8];
+        dst2[z] = sc->state[290 + z * 8];
+        dst3[z] = sc->state[291 + z * 8];
+        dst4[z] = sc->state[292 + z * 8];
+        dst5[z] = sc->state[293 + z * 8];
+        dst6[z] = sc->state[294 + z * 8];
+        dst7[z] = sc->state[295 + z * 8];
     }
 }
 

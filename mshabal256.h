@@ -62,24 +62,12 @@
 extern "C" {
 #endif
 
-  /*
-   * We need an integer type with width 32-bit or more (preferably, with
-   * a width of exactly 32 bits).
-   */
-#if defined __STDC__ && __STDC_VERSION__ >= 199901L
+    /*
+     * We need an integer type with width 32-bit or more (preferably, with
+     * a width of exactly 32 bits).
+     */
 #include <stdint.h>
-#ifdef UINT32_MAX
-  typedef uint32_t mshabal256_u32;
-#else
-  typedef uint_fast32_t mshabal256_u32;
-#endif
-#else
-#if ((UINT_MAX >> 11) >> 11) >= 0x3FF
-  typedef unsigned int mshabal256_u32;
-#else
-  typedef unsigned long mshabal256_u32;
-#endif
-#endif
+
 
 #define MSHABAL256_FACTOR 2
 
@@ -98,8 +86,8 @@ extern "C" {
     unsigned char buf6[64];
     unsigned char buf7[64];
     size_t ptr;
-    mshabal256_u32 state[(12 + 16 + 16) * 4 * MSHABAL256_FACTOR];
-    mshabal256_u32 Whigh, Wlow;
+    uint32_t state[(12 + 16 + 16) * 4 * MSHABAL256_FACTOR];
+    uint32_t Whigh, Wlow;
     unsigned out_size;
   } mshabal256_context;
 
@@ -150,8 +138,8 @@ extern "C" {
    * function does NOT imply a hidden call to mshabal256_init().
    */
   void mshabal256_close(mshabal256_context *sc,
-    void *dst0, void *dst1, void *dst2, void *dst3,
-    void *dst4, void *dst5, void *dst6, void *dst7);
+    uint32_t *dst0, uint32_t *dst1, uint32_t *dst2, uint32_t *dst3,
+    uint32_t *dst4, uint32_t *dst5, uint32_t *dst6, uint32_t *dst7);
 
 #ifdef  __cplusplus
 }
