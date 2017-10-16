@@ -251,8 +251,6 @@ mshabal256_compress(mshabal256_context *sc,
 
 void
 mshabal256_init(mshabal256_context *sc) {
-    unsigned u;
-    
     memset(sc->state, 0, 1408);
     
     memset(sc->buf0, 0, sizeof sc->buf0);
@@ -263,7 +261,7 @@ mshabal256_init(mshabal256_context *sc) {
     memset(sc->buf5, 0, sizeof sc->buf5);
     memset(sc->buf6, 0, sizeof sc->buf6);
     memset(sc->buf7, 0, sizeof sc->buf7);
-    for (u = 0; u < 16; u++) {
+    for (uint8_t u = 0; u < 16; u++) {
         uint8_t idx = u * 4;
         sc->buf0[idx] = 256 + u;
         sc->buf1[idx] = 256 + u;
@@ -285,7 +283,7 @@ mshabal256_init(mshabal256_context *sc) {
     }
     sc->Whigh = sc->Wlow = C32(0xFFFFFFFF);
     mshabal256_compress(sc, sc->buf0, sc->buf1, sc->buf2, sc->buf3, sc->buf4, sc->buf5, sc->buf6, sc->buf7, 1);
-    for (u = 0; u < 16; u++) {
+    for (uint8_t u = 0; u < 16; u++) {
         uint8_t idx = u * 4;
         sc->buf0[idx] = 272 + u;
         sc->buf1[idx] = 272 + u;
@@ -309,7 +307,6 @@ mshabal256_init(mshabal256_context *sc) {
     sc->ptr = 0;
 }
 
-/* see shabal_small.h */
 void
 mshabal256(mshabal256_context *sc,
            const void *data0, const void *data1, const void *data2, const void *data3,
@@ -385,7 +382,6 @@ mshabal256_close(mshabal256_context *sc,
                  uint32_t *dst0, uint32_t *dst1, uint32_t *dst2, uint32_t *dst3,
                  uint32_t *dst4, uint32_t *dst5, uint32_t *dst6, uint32_t *dst7) {
     size_t ptr = sc->ptr;
-    uint32_t z;
 
     sc->buf0[ptr] = 0x80;
     sc->buf1[ptr] = 0x80;
@@ -406,13 +402,13 @@ mshabal256_close(mshabal256_context *sc,
     memset(sc->buf6 + ptr, 0, (sizeof sc->buf6) - ptr);
     memset(sc->buf7 + ptr, 0, (sizeof sc->buf7) - ptr);
 
-    for (z = 0; z < 4; z++) {
+    for (uint8_t z = 0; z < 4; z++) {
         mshabal256_compress(sc, sc->buf0, sc->buf1, sc->buf2, sc->buf3, sc->buf4, sc->buf5, sc->buf6, sc->buf7, 1);
         if (sc->Wlow-- == 0)
             sc->Whigh--;
     }
 
-    for (z = 0; z < 8; z++) {
+    for (uint8_t z = 0; z < 8; z++) {
         dst0[z] = sc->state[288 + z * 8];
         dst1[z] = sc->state[289 + z * 8];
         dst2[z] = sc->state[290 + z * 8];

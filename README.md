@@ -33,7 +33,7 @@ rico666 <bots@cryptoguru.org>                 (Don't donate)
 ### Usage:
 
 ```bash
-./plot64 -k KEY [-x <core>] [-d <dir>] [-s STARTNONCE] [-n NONCES] [-m STAGGERSIZE] [-t THREADS] [-a]
+./plot64 -k KEY [-x <core>] [-d <dir>] [-s <startnonce>] [-n <nonces>] [-m <staggersize>] [-t <threads>] [-a]
   -a
     Flag to use asynchronous writing mode. If this is set, the plotter can work
     even while data is being written to disk. It will give you more speed at the
@@ -51,7 +51,7 @@ rico666 <bots@cryptoguru.org>                 (Don't donate)
     memory of the machine. Please be aware that in combination with the -a parameter
     the memory requirement is doubled!
     
-  -n <nonces>
+  -n <nonces|spacedef>
     The number of nonces to plot. Each nonce is 256KB in size. If you do not
     give the number of nonces, the program will try to plot the maximum number
     of nonces that are possible according to the free disk space where
@@ -87,13 +87,14 @@ usage information.
 The file name will have a '.plotting' suffix while the file is incomplete, and then
 renamed to the standard format if plotting is successful. 
 
-AVX2/SSE4 usage: In order to achieve best performance, you should make sure that the
+AVX2/SSE4 usage: In order to achieve best performance, you must make sure that the
 number of nonces to plot will match the number of threads like this:
 * for SSE4: nonces is a multiple of threads * 4
 * for AVX2: nonces is a multiple of threads * 8
 
-If you do not match these numbers, the plotter will fall back to default core for nonces
-that are not multiple of 4 or 8 respectively.
+If you do not match these numbers, the plotter will refuse to work for SSE4 and AVX2
+cores, the default core will work on any arbitrary number of nonces.
+
 
 For \<startnonce>, \<staggersize> and \<nonces> you can either define just a number or
 add the T/t, G/g, M/m or K/k suffix. E.g. "-s 1234k"
@@ -101,6 +102,7 @@ add the T/t, G/g, M/m or K/k suffix. E.g. "-s 1234k"
 * M/m = 1024<sup>2</sup>
 * G/g = 1024<sup>3</sup>
 * T/t = 1024<sup>4</sup>
+in which case the definition is not the number of nonces, but the memory used.
 
 ### TODO:
 

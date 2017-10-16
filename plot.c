@@ -1,7 +1,8 @@
-// For Emacs: -*- mode:c++; eval: (folding-mode 1) -*-
-// Usage: ./plot64 -k <public key> -x <core> -s <start nonce> -n <nonces> -m <stagger size> -t <threads>
+/* For Emacs: -*- mode:c; eval: (folding-mode 1) -*-
+   Usage: ./plot64 -k <public key> -x <core> -s <start nonce> -n <nonces> -m <stagger size> -t <threads>
+*/
 
-// {{{ include, define, vars
+/* {{{ include, define, vars */
 
 #define USE_MULTI_SHABAL
 #define _GNU_SOURCE
@@ -63,9 +64,9 @@ char *outputdir = DEFAULTDIR;
     gendata[NONCE_SIZE + offset + 6] = xv[1];  \
     gendata[NONCE_SIZE + offset + 7] = xv[0]
 
-// }}}
+/* }}} */
 
-// {{{ nonce             original algorithm
+/* {{{ nonce             original algorithm */
 
 void nonce(uint64_t addr, uint64_t nonce, uint64_t cachepos) {
     char final[32];
@@ -75,12 +76,13 @@ void nonce(uint64_t addr, uint64_t nonce, uint64_t cachepos) {
     SET_NONCE(gendata, addr,  0);
     SET_NONCE(gendata, nonce, 8);
 
-    shabal_context x;
-    int i, len;
+    shabal_context init_x, x;
+    uint32_t len = NONCE_SIZE + 16;
 
-    for (i = NONCE_SIZE; i > 0; i -= HASH_SIZE) {
-        shabal_init(&x, 256);
-        len = NONCE_SIZE + 16 - i;
+    shabal_init(&init_x, 256);
+    for (uint32_t i = NONCE_SIZE; i > 0; i -= HASH_SIZE) {
+        memcpy(&x, &init_x, sizeof(init_x));
+        len -= i;
         if (len > HASH_CAP)
             len = HASH_CAP;
         shabal(&x, &gendata[i], len);
@@ -93,22 +95,22 @@ void nonce(uint64_t addr, uint64_t nonce, uint64_t cachepos) {
 
     // XOR with final
     uint64_t *start = (uint64_t*)gendata;
-    uint64_t *fint = (uint64_t*)&final;
+    uint64_t *fint  = (uint64_t*)&final;
 
-    for(i = 0; i < NONCE_SIZE; i += 32) {
-        *start ^= fint[0]; start ++;
-        *start ^= fint[1]; start ++;
-        *start ^= fint[2]; start ++;
-        *start ^= fint[3]; start ++;
+    for (uint32_t i = 0; i < NONCE_SIZE; i += 32) {
+        *start ^= fint[0]; start++;
+        *start ^= fint[1]; start++;
+        *start ^= fint[2]; start++;
+        *start ^= fint[3]; start++;
     }
 
     // Sort them:
-    for (i = 0; i < NONCE_SIZE; i += SCOOP_SIZE)
+    for (uint32_t i = 0; i < NONCE_SIZE; i += SCOOP_SIZE)
         memmove(&cache[cachepos * SCOOP_SIZE + (uint64_t)i * staggersize], &gendata[i], SCOOP_SIZE);
 }
 
-// }}}
-// {{{ mnonce            SSE4 version
+/* }}} */
+/* {{{ mnonce            SSE4 version       */
 
 int
 mnonce(uint64_t addr,
@@ -299,8 +301,8 @@ work_i(void *x_void_ptr) {
     return NULL;
 }
 
-// }}}
-// {{{ getMS
+/* }}} */
+/* {{{ getMS */
 
 uint64_t
 getMS() {
@@ -309,8 +311,8 @@ getMS() {
     return ((uint64_t)time.tv_sec * 1000000) + time.tv_usec;
 }
 
-// }}}
-// {{{ usage
+/* }}} */
+/* {{{ usage */
 
 void usage(char **argv) {
     printf("Usage: %s -k KEY [ -x CORE ] [-d DIRECTORY] [-s STARTNONCE] [-n NONCES] [-m STAGGERSIZE] [-t THREADS] -a\n\n", argv[0]);
@@ -318,8 +320,8 @@ void usage(char **argv) {
     exit(-1);
 }
 
-// }}}
-// {{{ writecache
+/* }}} */
+/* {{{ writecache */
 
 void *
 writecache(void *arguments) {
@@ -366,9 +368,9 @@ writecache(void *arguments) {
     return NULL;
 }
 
-// }}}
+/* }}} */
 
-// {{{ main
+/* {{{ main */
 
 int main(int argc, char **argv) {
     if (argc < 2) {
@@ -662,4 +664,4 @@ int main(int argc, char **argv) {
     return 0;
 }
 
-// }}}
+/* }}} */
