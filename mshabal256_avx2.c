@@ -27,10 +27,6 @@
     extern "C" {
 #endif
 
-#ifdef _MSC_VER
-#pragma warning (disable: 4146)
-#endif
-
 #define C32(x)         ((uint32_t)x ## UL)
 #define T32(x)         ((x) & C32(0xFFFFFFFF))
 #define ROTL32(x, n)   T32(((x) << (n)) | ((x) >> (32 - (n))))
@@ -89,10 +85,10 @@ mshabal256_compress(mshabal256_context *sc,
             B[j] = _mm256_or_si256(_mm256_slli_epi32(B[j], 17),
                                    _mm256_srli_epi32(B[j], 15));
 
-#define PP(xa0, xa1, xb0, xb1, xb2, xb3, xc, xm)   do { \
-            __m256i tt;                                 \
-            tt = _mm256_or_si256(_mm256_slli_epi32(xa1, 15),    \
-                                 _mm256_srli_epi32(xa1, 17));   \
+#define PP(xa0, xa1, xb0, xb1, xb2, xb3, xc, xm)   do {                 \
+            __m256i tt;                                                 \
+            tt = _mm256_or_si256(_mm256_slli_epi32(xa1, 15),            \
+                                 _mm256_srli_epi32(xa1, 17));           \
             tt = _mm256_add_epi32(_mm256_slli_epi32(tt, 2), tt);        \
             tt = _mm256_xor_si256(_mm256_xor_si256(xa0, tt), xc);       \
             tt = _mm256_add_epi32(_mm256_slli_epi32(tt, 1), tt);        \
@@ -356,14 +352,15 @@ mshabal256(mshabal256_context *sc,
     num = len >> 6;
     if (num) {
         mshabal256_compress(sc, data0, data1, data2, data3, data4, data5, data6, data7, num);
-        data0 = (const uint8_t *)data0 + (num << 6);
-        data1 = (const uint8_t *)data1 + (num << 6);
-        data2 = (const uint8_t *)data2 + (num << 6);
-        data3 = (const uint8_t *)data3 + (num << 6);
-        data4 = (const uint8_t *)data4 + (num << 6);
-        data5 = (const uint8_t *)data5 + (num << 6);
-        data6 = (const uint8_t *)data6 + (num << 6);
-        data7 = (const uint8_t *)data7 + (num << 6);
+        num <<= 6;
+        data0 = (const uint8_t *)data0 + num;
+        data1 = (const uint8_t *)data1 + num;
+        data2 = (const uint8_t *)data2 + num;
+        data3 = (const uint8_t *)data3 + num;
+        data4 = (const uint8_t *)data4 + num;
+        data5 = (const uint8_t *)data5 + num;
+        data6 = (const uint8_t *)data6 + num;
+        data7 = (const uint8_t *)data7 + num;
     }
     len &= (size_t)63;
     memcpy(sc->buf0, data0, len);
@@ -402,21 +399,26 @@ mshabal256_close(mshabal256_context *sc,
     memset(sc->buf6 + ptr, 0, (sizeof sc->buf6) - ptr);
     memset(sc->buf7 + ptr, 0, (sizeof sc->buf7) - ptr);
 
-    for (uint8_t z = 0; z < 4; z++) {
-        mshabal256_compress(sc, sc->buf0, sc->buf1, sc->buf2, sc->buf3, sc->buf4, sc->buf5, sc->buf6, sc->buf7, 1);
-        if (sc->Wlow-- == 0)
-            sc->Whigh--;
-    }
+    mshabal256_compress(sc, sc->buf0, sc->buf1, sc->buf2, sc->buf3, sc->buf4, sc->buf5, sc->buf6, sc->buf7, 1);
+    if (!sc->Wlow--) sc->Whigh--;
+    mshabal256_compress(sc, sc->buf0, sc->buf1, sc->buf2, sc->buf3, sc->buf4, sc->buf5, sc->buf6, sc->buf7, 1);
+    if (!sc->Wlow--) sc->Whigh--;
+    mshabal256_compress(sc, sc->buf0, sc->buf1, sc->buf2, sc->buf3, sc->buf4, sc->buf5, sc->buf6, sc->buf7, 1);
+    if (!sc->Wlow--) sc->Whigh--;
+    mshabal256_compress(sc, sc->buf0, sc->buf1, sc->buf2, sc->buf3, sc->buf4, sc->buf5, sc->buf6, sc->buf7, 1);
+    if (!sc->Wlow--) sc->Whigh--;
 
-    for (uint8_t z = 0; z < 8; z++) {
-        dst0[z] = sc->state[288 + z * 8];
-        dst1[z] = sc->state[289 + z * 8];
-        dst2[z] = sc->state[290 + z * 8];
-        dst3[z] = sc->state[291 + z * 8];
-        dst4[z] = sc->state[292 + z * 8];
-        dst5[z] = sc->state[293 + z * 8];
-        dst6[z] = sc->state[294 + z * 8];
-        dst7[z] = sc->state[295 + z * 8];
+    uint8_t i = 0;
+    for (uint16_t z = 288; z < 352;) {
+        dst0[i] = sc->state[z++];
+        dst1[i] = sc->state[z++];
+        dst2[i] = sc->state[z++];
+        dst3[i] = sc->state[z++];
+        dst4[i] = sc->state[z++];
+        dst5[i] = sc->state[z++];
+        dst6[i] = sc->state[z++];
+        dst7[i] = sc->state[z++];
+        i++;
     }
 }
 

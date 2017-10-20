@@ -26,35 +26,30 @@
 extern "C" {
 #endif
 
-#ifdef _MSC_VER
-#pragma warning (disable: 4146)
-#endif
-
-  typedef mshabal_u32 u32;
+typedef mshabal_u32 u32;
 
 #define C32(x)         ((u32)x ## UL)
 #define T32(x)         ((x) & C32(0xFFFFFFFF))
 #define ROTL32(x, n)   T32(((x) << (n)) | ((x) >> (32 - (n))))
 
-  static void
-    sse4_mshabal_compress(mshabal_context *sc,
-    const unsigned char *buf0, const unsigned char *buf1,
-    const unsigned char *buf2, const unsigned char *buf3,
-    size_t num)
-  {
+static void
+sse4_mshabal_compress(mshabal_context *sc,
+                      const unsigned char *buf0, const unsigned char *buf1,
+                      const unsigned char *buf2, const unsigned char *buf3,
+                      size_t num) {
     union {
-      u32 words[64];
-      __m128i data[16];
+        u32 words[64];
+        __m128i data[16];
     } u;
     size_t j;
     __m128i A[12], B[16], C[16];
     __m128i one;
 
     for (j = 0; j < 12; j++)
-      A[j] = _mm_loadu_si128((__m128i *)sc->state + j);
+        A[j] = _mm_loadu_si128((__m128i *)sc->state + j);
     for (j = 0; j < 16; j++) {
-      B[j] = _mm_loadu_si128((__m128i *)sc->state + j + 12);
-      C[j] = _mm_loadu_si128((__m128i *)sc->state + j + 28);
+        B[j] = _mm_loadu_si128((__m128i *)sc->state + j + 12);
+        C[j] = _mm_loadu_si128((__m128i *)sc->state + j + 28);
     }
     one = _mm_set1_epi32(C32(0xFFFFFFFF));
 
@@ -62,39 +57,39 @@ extern "C" {
 
     while (num-- > 0) {
 
-      for (j = 0; j < 64; j += 4) {
-        u.words[j + 0] = *(u32 *)(buf0 + j);
-        u.words[j + 1] = *(u32 *)(buf1 + j);
-        u.words[j + 2] = *(u32 *)(buf2 + j);
-        u.words[j + 3] = *(u32 *)(buf3 + j);
-      }
+        for (j = 0; j < 64; j += 4) {
+            u.words[j + 0] = *(u32 *)(buf0 + j);
+            u.words[j + 1] = *(u32 *)(buf1 + j);
+            u.words[j + 2] = *(u32 *)(buf2 + j);
+            u.words[j + 3] = *(u32 *)(buf3 + j);
+        }
 
-      for (j = 0; j < 16; j++)
-        B[j] = _mm_add_epi32(B[j], M(j));
+        for (j = 0; j < 16; j++)
+            B[j] = _mm_add_epi32(B[j], M(j));
 
-      A[0] = _mm_xor_si128(A[0], _mm_set1_epi32(sc->Wlow));
-      A[1] = _mm_xor_si128(A[1], _mm_set1_epi32(sc->Whigh));
+        A[0] = _mm_xor_si128(A[0], _mm_set1_epi32(sc->Wlow));
+        A[1] = _mm_xor_si128(A[1], _mm_set1_epi32(sc->Whigh));
 
-      for (j = 0; j < 16; j++)
-        B[j] = _mm_or_si128(_mm_slli_epi32(B[j], 17),
-        _mm_srli_epi32(B[j], 15));
+        for (j = 0; j < 16; j++)
+            B[j] = _mm_or_si128(_mm_slli_epi32(B[j], 17),
+                                _mm_srli_epi32(B[j], 15));
 
-#define PP(xa0, xa1, xb0, xb1, xb2, xb3, xc, xm)   do { \
-		__m128i tt; \
-		tt = _mm_or_si128(_mm_slli_epi32(xa1, 15), \
-			_mm_srli_epi32(xa1, 17)); \
-		tt = _mm_add_epi32(_mm_slli_epi32(tt, 2), tt); \
-		tt = _mm_xor_si128(_mm_xor_si128(xa0, tt), xc); \
-		tt = _mm_add_epi32(_mm_slli_epi32(tt, 1), tt); \
-		tt = _mm_xor_si128( \
-			_mm_xor_si128(tt, xb1), \
-			_mm_xor_si128(_mm_andnot_si128(xb3, xb2), xm)); \
-		xa0 = tt; \
-		tt = xb0; \
-		tt = _mm_or_si128(_mm_slli_epi32(tt, 1), \
-			_mm_srli_epi32(tt, 31)); \
-		xb0 = _mm_xor_si128(tt, _mm_xor_si128(xa0, one)); \
-            	} while (0)
+#define PP(xa0, xa1, xb0, xb1, xb2, xb3, xc, xm)   do {                 \
+            __m128i tt;                                                 \
+            tt = _mm_or_si128(_mm_slli_epi32(xa1, 15),                  \
+                              _mm_srli_epi32(xa1, 17));                 \
+            tt = _mm_add_epi32(_mm_slli_epi32(tt, 2), tt);              \
+            tt = _mm_xor_si128(_mm_xor_si128(xa0, tt), xc);             \
+            tt = _mm_add_epi32(_mm_slli_epi32(tt, 1), tt);              \
+            tt = _mm_xor_si128(                                         \
+                               _mm_xor_si128(tt, xb1),                  \
+                               _mm_xor_si128(_mm_andnot_si128(xb3, xb2), xm)); \
+            xa0 = tt;                                                   \
+            tt = xb0;                                                   \
+            tt = _mm_or_si128(_mm_slli_epi32(tt, 1),                    \
+                              _mm_srli_epi32(tt, 31));                  \
+            xb0 = _mm_xor_si128(tt, _mm_xor_si128(xa0, one));           \
+        } while (0)
 
       PP(A[0x0], A[0xB], B[0x0], B[0xD], B[0x9], B[0x6], C[0x8], M(0x0));
       PP(A[0x1], A[0x0], B[0x1], B[0xE], B[0xA], B[0x7], C[0x7], M(0x1));
@@ -184,12 +179,12 @@ extern "C" {
       A[0x1] = _mm_add_epi32(A[0x1], C[0x4]);
       A[0x0] = _mm_add_epi32(A[0x0], C[0x3]);
 
-#define SWAP_AND_SUB(xb, xc, xm)   do { \
-		__m128i tmp; \
-		tmp = xb; \
-		xb = _mm_sub_epi32(xc, xm); \
-		xc = tmp; \
-            	} while (0)
+#define SWAP_AND_SUB(xb, xc, xm)   do {         \
+          __m128i tmp;                          \
+          tmp = xb;                             \
+          xb = _mm_sub_epi32(xc, xm);           \
+          xc = tmp;                             \
+      } while (0)
 
       SWAP_AND_SUB(B[0x0], C[0x0], M(0x0));
       SWAP_AND_SUB(B[0x1], C[0x1], M(0x1));
@@ -213,53 +208,52 @@ extern "C" {
       buf2 += 64;
       buf3 += 64;
       if (++sc->Wlow == 0)
-        sc->Whigh++;
+          sc->Whigh++;
 
     }
 
     for (j = 0; j < 12; j++)
-      _mm_storeu_si128((__m128i *)sc->state + j, A[j]);
+        _mm_storeu_si128((__m128i *)sc->state + j, A[j]);
     for (j = 0; j < 16; j++) {
-      _mm_storeu_si128((__m128i *)sc->state + j + 12, B[j]);
-      _mm_storeu_si128((__m128i *)sc->state + j + 28, C[j]);
+        _mm_storeu_si128((__m128i *)sc->state + j + 12, B[j]);
+        _mm_storeu_si128((__m128i *)sc->state + j + 28, C[j]);
     }
 
 #undef M
-  }
+}
 
   /* see shabal_small.h */
-  void
-    sse4_mshabal_init(mshabal_context *sc, unsigned out_size)
-  {
+void
+sse4_mshabal_init(mshabal_context *sc, unsigned out_size) {
     unsigned u;
 
     for (u = 0; u < 176; u++)
-      sc->state[u] = 0;
+        sc->state[u] = 0;
     memset(sc->buf0, 0, sizeof sc->buf0);
     memset(sc->buf1, 0, sizeof sc->buf1);
     memset(sc->buf2, 0, sizeof sc->buf2);
     memset(sc->buf3, 0, sizeof sc->buf3);
     for (u = 0; u < 16; u++) {
-      sc->buf0[4 * u + 0] = (out_size + u);
-      sc->buf0[4 * u + 1] = (out_size + u) >> 8;
-      sc->buf1[4 * u + 0] = (out_size + u);
-      sc->buf1[4 * u + 1] = (out_size + u) >> 8;
-      sc->buf2[4 * u + 0] = (out_size + u);
-      sc->buf2[4 * u + 1] = (out_size + u) >> 8;
-      sc->buf3[4 * u + 0] = (out_size + u);
-      sc->buf3[4 * u + 1] = (out_size + u) >> 8;
+        sc->buf0[4 * u + 0] = (out_size + u);
+        sc->buf0[4 * u + 1] = (out_size + u) >> 8;
+        sc->buf1[4 * u + 0] = (out_size + u);
+        sc->buf1[4 * u + 1] = (out_size + u) >> 8;
+        sc->buf2[4 * u + 0] = (out_size + u);
+        sc->buf2[4 * u + 1] = (out_size + u) >> 8;
+        sc->buf3[4 * u + 0] = (out_size + u);
+        sc->buf3[4 * u + 1] = (out_size + u) >> 8;
     }
     sc->Whigh = sc->Wlow = C32(0xFFFFFFFF);
     sse4_mshabal_compress(sc, sc->buf0, sc->buf1, sc->buf2, sc->buf3, 1);
     for (u = 0; u < 16; u++) {
-      sc->buf0[4 * u + 0] = (out_size + u + 16);
-      sc->buf0[4 * u + 1] = (out_size + u + 16) >> 8;
-      sc->buf1[4 * u + 0] = (out_size + u + 16);
-      sc->buf1[4 * u + 1] = (out_size + u + 16) >> 8;
-      sc->buf2[4 * u + 0] = (out_size + u + 16);
-      sc->buf2[4 * u + 1] = (out_size + u + 16) >> 8;
-      sc->buf3[4 * u + 0] = (out_size + u + 16);
-      sc->buf3[4 * u + 1] = (out_size + u + 16) >> 8;
+        sc->buf0[4 * u + 0] = (out_size + u + 16);
+        sc->buf0[4 * u + 1] = (out_size + u + 16) >> 8;
+        sc->buf1[4 * u + 0] = (out_size + u + 16);
+        sc->buf1[4 * u + 1] = (out_size + u + 16) >> 8;
+        sc->buf2[4 * u + 0] = (out_size + u + 16);
+        sc->buf2[4 * u + 1] = (out_size + u + 16) >> 8;
+        sc->buf3[4 * u + 0] = (out_size + u + 16);
+        sc->buf3[4 * u + 1] = (out_size + u + 16) >> 8;
     }
     sse4_mshabal_compress(sc, sc->buf0, sc->buf1, sc->buf2, sc->buf3, 1);
     sc->ptr = 0;
@@ -267,72 +261,71 @@ extern "C" {
   }
 
   /* see shabal_small.h */
-  void
-    sse4_mshabal(mshabal_context *sc, const void *data0, const void *data1,
-    const void *data2, const void *data3, size_t len)
-  {
+void
+sse4_mshabal(mshabal_context *sc, const void *data0, const void *data1,
+             const void *data2, const void *data3, size_t len) {
     size_t ptr, num;
 
     if (data0 == NULL) {
-      if (data1 == NULL) {
-        if (data2 == NULL) {
-          if (data3 == NULL) {
-            return;
-          }
-          else {
-            data0 = data3;
-          }
-        }
+        if (data1 == NULL) {
+            if (data2 == NULL) {
+                if (data3 == NULL) {
+                    return;
+                }
+                else {
+                    data0 = data3;
+                }
+            }
+            else {
+                data0 = data2;
+            }
+      }
         else {
-          data0 = data2;
+            data0 = data1;
         }
-      }
-      else {
-        data0 = data1;
-      }
     }
     if (data1 == NULL)
-      data1 = data0;
+        data1 = data0;
     if (data2 == NULL)
-      data2 = data0;
+        data2 = data0;
     if (data3 == NULL)
-      data3 = data0;
+        data3 = data0;
 
     ptr = sc->ptr;
     if (ptr != 0) {
-      size_t clen;
+        size_t clen;
 
-      clen = (sizeof sc->buf0 - ptr);
-      if (clen > len) {
-        memcpy(sc->buf0 + ptr, data0, len);
-        memcpy(sc->buf1 + ptr, data1, len);
-        memcpy(sc->buf2 + ptr, data2, len);
-        memcpy(sc->buf3 + ptr, data3, len);
-        sc->ptr = ptr + len;
-        return;
-      }
-      else {
-        memcpy(sc->buf0 + ptr, data0, clen);
-        memcpy(sc->buf1 + ptr, data1, clen);
-        memcpy(sc->buf2 + ptr, data2, clen);
-        memcpy(sc->buf3 + ptr, data3, clen);
-        sse4_mshabal_compress(sc,
-          sc->buf0, sc->buf1, sc->buf2, sc->buf3, 1);
-        data0 = (const unsigned char *)data0 + clen;
-        data1 = (const unsigned char *)data1 + clen;
-        data2 = (const unsigned char *)data2 + clen;
-        data3 = (const unsigned char *)data3 + clen;
-        len -= clen;
-      }
+        clen = (sizeof sc->buf0 - ptr);
+        if (clen > len) {
+            memcpy(sc->buf0 + ptr, data0, len);
+            memcpy(sc->buf1 + ptr, data1, len);
+            memcpy(sc->buf2 + ptr, data2, len);
+            memcpy(sc->buf3 + ptr, data3, len);
+            sc->ptr = ptr + len;
+            return;
+        }
+        else {
+            memcpy(sc->buf0 + ptr, data0, clen);
+            memcpy(sc->buf1 + ptr, data1, clen);
+            memcpy(sc->buf2 + ptr, data2, clen);
+            memcpy(sc->buf3 + ptr, data3, clen);
+            sse4_mshabal_compress(sc,
+                                  sc->buf0, sc->buf1, sc->buf2, sc->buf3, 1);
+            data0 = (const unsigned char *)data0 + clen;
+            data1 = (const unsigned char *)data1 + clen;
+            data2 = (const unsigned char *)data2 + clen;
+            data3 = (const unsigned char *)data3 + clen;
+            len -= clen;
+        }
     }
 
     num = len >> 6;
     if (num != 0) {
-      sse4_mshabal_compress(sc, data0, data1, data2, data3, num);
-      data0 = (const unsigned char *)data0 + (num << 6);
-      data1 = (const unsigned char *)data1 + (num << 6);
-      data2 = (const unsigned char *)data2 + (num << 6);
-      data3 = (const unsigned char *)data3 + (num << 6);
+        sse4_mshabal_compress(sc, data0, data1, data2, data3, num);
+        data0 = (const unsigned char *)data0 + (num << 6);
+        data1 = (const unsigned char *)data1 + (num << 6);
+        data2 = (const unsigned char *)data2 + (num << 6);
+        data3 = (const unsigned char *)data3 + (num << 6);
     }
     len &= (size_t)63;
     memcpy(sc->buf0, data0, len);
@@ -340,14 +333,12 @@ extern "C" {
     memcpy(sc->buf2, data2, len);
     memcpy(sc->buf3, data3, len);
     sc->ptr = len;
-  }
+}
 
-  /* see shabal_small.h */
-  void
-    sse4_mshabal_close(mshabal_context *sc,
-    unsigned ub0, unsigned ub1, unsigned ub2, unsigned ub3, unsigned n,
-    void *dst0, void *dst1, void *dst2, void *dst3)
-  {
+/* see shabal_small.h */
+void sse4_mshabal_close(mshabal_context *sc,
+                        unsigned ub0, unsigned ub1, unsigned ub2, unsigned ub3, unsigned n,
+                        void *dst0, void *dst1, void *dst2, void *dst3) {
     size_t ptr, off;
     unsigned z, out_size_w32;
 
@@ -363,41 +354,41 @@ extern "C" {
     memset(sc->buf2 + ptr, 0, (sizeof sc->buf2) - ptr);
     memset(sc->buf3 + ptr, 0, (sizeof sc->buf3) - ptr);
     for (z = 0; z < 4; z++) {
-      sse4_mshabal_compress(sc, sc->buf0, sc->buf1, sc->buf2, sc->buf3, 1);
-      if (sc->Wlow-- == 0)
-        sc->Whigh--;
+        sse4_mshabal_compress(sc, sc->buf0, sc->buf1, sc->buf2, sc->buf3, 1);
+        if (sc->Wlow-- == 0)
+            sc->Whigh--;
     }
     out_size_w32 = sc->out_size >> 5;
     off = 4 * (28 + (16 - out_size_w32));
     if (dst0 != NULL) {
-      u32 *out;
+        u32 *out;
 
-      out = dst0;
-      for (z = 0; z < out_size_w32; z++)
-        out[z] = sc->state[off + (z << 2) + 0];
+        out = dst0;
+        for (z = 0; z < out_size_w32; z++)
+            out[z] = sc->state[off + (z << 2) + 0];
     }
     if (dst1 != NULL) {
-      u32 *out;
+        u32 *out;
 
-      out = dst1;
-      for (z = 0; z < out_size_w32; z++)
-        out[z] = sc->state[off + (z << 2) + 1];
+        out = dst1;
+        for (z = 0; z < out_size_w32; z++)
+            out[z] = sc->state[off + (z << 2) + 1];
     }
     if (dst2 != NULL) {
-      u32 *out;
+        u32 *out;
 
-      out = dst2;
-      for (z = 0; z < out_size_w32; z++)
-        out[z] = sc->state[off + (z << 2) + 2];
+        out = dst2;
+        for (z = 0; z < out_size_w32; z++)
+            out[z] = sc->state[off + (z << 2) + 2];
     }
     if (dst3 != NULL) {
-      u32 *out;
+        u32 *out;
 
-      out = dst3;
-      for (z = 0; z < out_size_w32; z++)
-        out[z] = sc->state[off + (z << 2) + 3];
+        out = dst3;
+        for (z = 0; z < out_size_w32; z++)
+            out[z] = sc->state[off + (z << 2) + 3];
     }
-  }
+}
 
 #ifdef  __cplusplus
   extern "C" {
