@@ -87,6 +87,8 @@ extern "C" {
         uint32_t Whigh, Wlow;
     } mshabal256_context;
 
+  void mshabal256_init_buffers(void);
+
   /*
    * Initialize a context structure. The output size is assumed to be
    * fixed to 256bit
