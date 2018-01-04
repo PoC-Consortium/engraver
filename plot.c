@@ -20,9 +20,7 @@
 #include <pthread.h>
 #include <time.h>
 #include <sys/time.h>
-#include <byteswap.h>
 
-#include "apex_memmove.h"
 #include "shabal.h"
 #include "mshabal256.h"
 #include "mshabal.h"
@@ -48,17 +46,23 @@ uint32_t threads     = 0;
 uint32_t noncesperthread;
 uint32_t selecttype  = 0;
 uint32_t asyncmode   = 0;
-double createtime    = 0.0;
 uint64_t starttime;
-uint64_t run         = 0;
-uint64_t lastrun, thisrun;
+uint64_t run, lastrun, thisrun;
 int ofd;
 
 char *cache, *wcache, *acache[2];
 char *outputdir = DEFAULTDIR;
 
 #define SET_NONCE(gendata, nonce, offset)      \
-    *(uint64_t *)(gendata + NONCE_SIZE + offset) = bswap_64(nonce)
+    xv = (char*)&nonce;                        \
+    gendata[NONCE_SIZE + offset]     = xv[7];  \
+    gendata[NONCE_SIZE + offset + 1] = xv[6];  \
+    gendata[NONCE_SIZE + offset + 2] = xv[5];  \
+    gendata[NONCE_SIZE + offset + 3] = xv[4];  \
+    gendata[NONCE_SIZE + offset + 4] = xv[3];  \
+    gendata[NONCE_SIZE + offset + 5] = xv[2];  \
+    gendata[NONCE_SIZE + offset + 6] = xv[1];  \
+    gendata[NONCE_SIZE + offset + 7] = xv[0]
 
 /* }}} */
 
@@ -67,7 +71,8 @@ char *outputdir = DEFAULTDIR;
 void nonce(uint64_t addr, uint64_t nonce, uint64_t cachepos) {
     char final[32];
     char gendata[16 + NONCE_SIZE];
-
+    char *xv;
+        
     SET_NONCE(gendata, addr,  0);
     SET_NONCE(gendata, nonce, 8);
 
@@ -76,7 +81,7 @@ void nonce(uint64_t addr, uint64_t nonce, uint64_t cachepos) {
 
     shabal_init(&init_x, 256);
     for (uint32_t i = NONCE_SIZE; i > 0; i -= HASH_SIZE) {
-        apex_memmove(&x, &init_x, sizeof(init_x));
+        memcpy(&x, &init_x, sizeof(init_x));
         len -= i;
         if (len > HASH_CAP)
             len = HASH_CAP;
@@ -101,7 +106,7 @@ void nonce(uint64_t addr, uint64_t nonce, uint64_t cachepos) {
 
     // Sort them:
     for (uint32_t i = 0; i < NONCE_SIZE; i += SCOOP_SIZE)
-        apex_memmove(&cache[cachepos * SCOOP_SIZE + (uint64_t)i * staggersize], &gendata[i], SCOOP_SIZE);
+        memmove(&cache[cachepos * SCOOP_SIZE + (uint64_t)i * staggersize], &gendata[i], SCOOP_SIZE);
 }
 
 /* }}} */
@@ -113,6 +118,8 @@ mnonce(uint64_t addr,
        uint64_t cachepos1, uint64_t cachepos2, uint64_t cachepos3, uint64_t cachepos4) {
     char final1[32], final2[32], final3[32], final4[32];
     char gendata1[16 + NONCE_SIZE], gendata2[16 + NONCE_SIZE], gendata3[16 + NONCE_SIZE], gendata4[16 + NONCE_SIZE];
+
+    char *xv;
 
     SET_NONCE(gendata1, addr,  0);
 
@@ -155,10 +162,10 @@ mnonce(uint64_t addr,
 
     // Sort them:
     for (int i = 0; i < NONCE_SIZE; i += 64) {
-        apex_memmove(&cache[cachepos1 * 64 + (uint64_t)i * staggersize], &gendata1[i], 64);
-        apex_memmove(&cache[cachepos2 * 64 + (uint64_t)i * staggersize], &gendata2[i], 64);
-        apex_memmove(&cache[cachepos3 * 64 + (uint64_t)i * staggersize], &gendata3[i], 64);
-        apex_memmove(&cache[cachepos4 * 64 + (uint64_t)i * staggersize], &gendata4[i], 64);
+        memmove(&cache[cachepos1 * 64 + (uint64_t)i * staggersize], &gendata1[i], 64);
+        memmove(&cache[cachepos2 * 64 + (uint64_t)i * staggersize], &gendata2[i], 64);
+        memmove(&cache[cachepos3 * 64 + (uint64_t)i * staggersize], &gendata3[i], 64);
+        memmove(&cache[cachepos4 * 64 + (uint64_t)i * staggersize], &gendata4[i], 64);
     }
 
     return 0;
@@ -176,6 +183,8 @@ m256nonce(uint64_t addr,
     char final5[32], final6[32], final7[32], final8[32];
     char gendata1[16 + NONCE_SIZE], gendata2[16 + NONCE_SIZE], gendata3[16 + NONCE_SIZE], gendata4[16 + NONCE_SIZE];
     char gendata5[16 + NONCE_SIZE], gendata6[16 + NONCE_SIZE], gendata7[16 + NONCE_SIZE], gendata8[16 + NONCE_SIZE];
+
+    char *xv;
 
     SET_NONCE(gendata1, addr,  0);
 
@@ -237,14 +246,14 @@ m256nonce(uint64_t addr,
 
     // Sort them:
     for (int i = 0; i < NONCE_SIZE; i += 64) {
-      apex_memmove(&cache[cachepos * 64 +       (uint64_t)i * staggersize], &gendata1[i], 64);
-      apex_memmove(&cache[cachepos * 64 +  64 + (uint64_t)i * staggersize], &gendata2[i], 64);
-      apex_memmove(&cache[cachepos * 64 + 128 + (uint64_t)i * staggersize], &gendata3[i], 64);
-      apex_memmove(&cache[cachepos * 64 + 192 + (uint64_t)i * staggersize], &gendata4[i], 64);
-      apex_memmove(&cache[cachepos * 64 + 256 + (uint64_t)i * staggersize], &gendata5[i], 64);
-      apex_memmove(&cache[cachepos * 64 + 320 + (uint64_t)i * staggersize], &gendata6[i], 64);
-      apex_memmove(&cache[cachepos * 64 + 384 + (uint64_t)i * staggersize], &gendata7[i], 64);
-      apex_memmove(&cache[cachepos * 64 + 448 + (uint64_t)i * staggersize], &gendata8[i], 64);
+      memmove(&cache[cachepos * 64 +       (uint64_t)i * staggersize], &gendata1[i], 64);
+      memmove(&cache[cachepos * 64 +  64 + (uint64_t)i * staggersize], &gendata2[i], 64);
+      memmove(&cache[cachepos * 64 + 128 + (uint64_t)i * staggersize], &gendata3[i], 64);
+      memmove(&cache[cachepos * 64 + 192 + (uint64_t)i * staggersize], &gendata4[i], 64);
+      memmove(&cache[cachepos * 64 + 256 + (uint64_t)i * staggersize], &gendata5[i], 64);
+      memmove(&cache[cachepos * 64 + 320 + (uint64_t)i * staggersize], &gendata6[i], 64);
+      memmove(&cache[cachepos * 64 + 384 + (uint64_t)i * staggersize], &gendata7[i], 64);
+      memmove(&cache[cachepos * 64 + 448 + (uint64_t)i * staggersize], &gendata8[i], 64);
     }
 
     return 0;
@@ -256,15 +265,14 @@ void *
 work_i(void *x_void_ptr) {
     uint64_t i = *(uint64_t *)x_void_ptr;
 
-    uint32_t n, o;
+    uint32_t n;
 
     if (selecttype == 2) { // AVX2
-        for (n = 0; n < noncesperthread; n += 8) {
-            o = i + n;
+        for (n = 0; n < noncesperthread; n += 8) {            
             m256nonce(addr,
-                      (o + 0), (o + 1), (o + 2), (o + 3),
-                      (o + 4), (o + 5), (o + 6), (o + 7),
-                      (o - startnonce));
+                      (i + n + 0), (i + n + 1), (i + n + 2), (i + n + 3),
+                      (i + n + 4), (i + n + 5), (i + n + 6), (i + n + 7),
+                      (i - startnonce + n));
         }
     }
     else {
@@ -319,16 +327,16 @@ void *
 writecache(void *arguments) {
     uint64_t cacheblocksize = staggersize * SCOOP_SIZE;
     uint64_t thisnonce;
-    double percent;
+    int percent;
 
-    percent = 100.0 * (double)lastrun / (double)nonces;
+    percent = (int)(100 * lastrun / nonces);
 
     if (asyncmode == 1) {
-        printf("\33[2K\r%.1f Percent done. %d nonces created in %.1f seconds. (ASYNC write)", percent, (int)staggersize, createtime);
+        printf("\33[2K\r%i Percent done. (ASYNC write)", percent);
         fflush(stdout);
     }
     else {
-        printf("\33[2K\r%.1f Percent done. %d nonces created in %.1f seconds. (write)", percent, (int)staggersize, createtime);
+        printf("\33[2K\r%i Percent done. (write)", percent);
         fflush(stdout);
     }
 
@@ -346,40 +354,18 @@ writecache(void *arguments) {
     }
 
     uint64_t ms = getMS() - starttime;
-
-    percent = 100.0 * (double)lastrun / (double)nonces;
+        
+    percent = (int)(100 * lastrun / nonces);
     double minutes = (double)ms / (1000000 * 60);
     int    speed   = (int)(staggersize / minutes);
     int    m       = (int)(nonces - run) / speed;
     int    h       = (int)(m / 60);
     m -= h * 60;
 
-    printf("\33[2K\r%.1f Percent done. %i nonces/minute, %i:%02i left", percent, speed, h, m);
+    printf("\33[2K\r%i Percent done. %i nonces/minute, %i:%02i left", percent, speed, h, m);
     fflush(stdout);
 
     return NULL;
-}
-
-/* }}} */
-
-/* {{{ writestatus */
-
-void
-writestatus(void) {
-    // Write current status to the end of the file
-    if ( lseek64(ofd, -20, SEEK_END) < 0 ) {
-        printf("\n\nError while lseek()ing in file: %d\n\n", errno);
-        exit(1);
-    }
-    // Write (uint64_t)run, (uint64_t)startnonce, (uint32_t)staggersize
-    if ( write(ofd, &run, sizeof run) < 0 ) {
-        printf("\n\nError while writing to file: %d\n\n", errno);
-        exit(1);
-    }
-    if ( write(ofd, &startnonce, sizeof startnonce) < 0 ) {
-        printf("\n\nError while writing to file: %d\n\n", errno);
-        exit(1);
-    }
 }
 
 /* }}} */
@@ -393,7 +379,6 @@ int main(int argc, char **argv) {
     
     int i;
     int startgiven = 0;
-    int resume = 0;
     for (uint8_t i = 1; i < argc; i++) {
         // Ignore unknown argument
         if(argv[i][0] != '-')
@@ -402,11 +387,6 @@ int main(int argc, char **argv) {
         if (!strcmp(argv[i],"-a")) {
             asyncmode = 1;
             printf("Async mode set.\n");
-            continue;
-        }
-
-        if (!strcmp(argv[i],"-R")) {
-            resume = 1;
             continue;
         }
 
@@ -473,7 +453,7 @@ int main(int argc, char **argv) {
             case 'd':
                 ds = strlen(parse);
                 outputdir = (char*) malloc(ds + 2);
-                apex_memmove(outputdir, parse, ds);
+                memcpy(outputdir, parse, ds);
                 // Add final slash?
                 if (outputdir[ds - 1] != '/') {
                     outputdir[ds] = '/';
@@ -482,6 +462,7 @@ int main(int argc, char **argv) {
                 else {
                     outputdir[ds] = 0;
                 }
+                                        
             }                       
         }
     }
@@ -587,12 +568,7 @@ int main(int argc, char **argv) {
     sprintf(name, "%s%"PRIu64"_%"PRIu64"_%u_%u.plotting", outputdir, addr, startnonce, nonces, nonces);
     sprintf(finalname, "%s%"PRIu64"_%"PRIu64"_%u_%u", outputdir, addr, startnonce, nonces, nonces);
 
-    int readconfig = 0;
-    if ( !resume ) {
-        unlink(name); // no need to see if file exists: unlink can handle that
-    } else if( access( name, F_OK ) != -1 ) {
-        readconfig = 1;
-    }
+    unlink(name); // no need to see if file exists: unlink can handle that
 
     ofd = open(name, O_CREAT | O_LARGEFILE | O_RDWR, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
     if (ofd < 0) {
@@ -600,44 +576,14 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
-    if ( readconfig ) {
-        // Read config and initial status to the end of the file
-        if ( lseek64(ofd, -20, SEEK_END) < 0 ) {
-            printf("\n\nError while lseek()ing in file: %d\n\n", errno);
-            exit(1);
-        }
-        // Read (uint64_t)run, (uint64_t)startnonce, (uint32_t)staggersize
-        if ( read(ofd, &run, sizeof run) < sizeof run ) {
-            printf("\n\nError while reading from file: %d\n\n", errno);
-            exit(1);
-        }
-        if ( read(ofd, &startnonce, sizeof startnonce) < sizeof startnonce ) {
-            printf("\n\nError while reading from file: %d\n\n", errno);
-            exit(1);
-        }
-        if ( read(ofd, &staggersize, sizeof staggersize) < sizeof staggersize ) {
-            printf("\n\nError while reading from file: %d\n\n", errno);
-            exit(1);
-        }
-        printf("Resuming at nonce %ld with staggersize %d...\n", startnonce, staggersize);
+    // pre-allocate space to prevent fragmentation
+    printf("Pre-allocating space for file (%ld bytes)...\n", (uint64_t)nonces * NONCE_SIZE);
+    if ( posix_fallocate(ofd, 0, (uint64_t)nonces * NONCE_SIZE) != 0 ) {
+        printf("File pre-allocation failed.\n");
+        return 1;       
     }
     else {
-        // pre-allocate space to prevent fragmentation
-        uint64_t filesize = (uint64_t)nonces * NONCE_SIZE;
-        printf("Pre-allocating space for file (%ld bytes)...\n", filesize);
-        if ( posix_fallocate(ofd, 0, filesize) != 0 ) {
-            printf("File pre-allocation failed.\n");
-            return 1;       
-        }
-        else {
-            printf("Done pre-allocating space.\n");
-        }
-
-        writestatus();
-        if ( write(ofd, &staggersize, sizeof staggersize) < 0 ) {
-            printf("\n\nError while writing to file: %d\n\n", errno);
-            exit(1);
-        }
+        printf("Done pre-allocating space.\n");
     }
 
     // Threads:
@@ -649,19 +595,14 @@ int main(int argc, char **argv) {
     }
 
     pthread_t worker[threads], writeworker;
-    int workerrunning = 0;
     uint64_t nonceoffset[threads];
 
     int asyncbuf = 0;
-    double totalcreatetime = 0.0;
     uint64_t astarttime;
     if (asyncmode == 1) cache = acache[asyncbuf];
     else wcache = cache;
 
-    mshabal256_init_buffers();
-
-    for (; run < nonces; run += staggersize) {
-        writestatus();
+    for (run = 0; run < nonces; run += staggersize) {
         astarttime = getMS();
 
         for (i = 0; i < threads; i++) {
@@ -681,12 +622,9 @@ int main(int argc, char **argv) {
             nonce(addr, startnonce + i, (uint64_t)i);
 
         // Write plot to disk:
-        createtime = ((double)getMS() - (double)astarttime) / 1000000.0;
-        totalcreatetime += createtime;
         starttime = astarttime;
         if (asyncmode == 1) {
-            if (workerrunning) pthread_join(writeworker, NULL);
-            else workerrunning = 1;
+            if (run > 0) pthread_join(writeworker, NULL);
             thisrun = run;
             lastrun = run + staggersize;
             wcache = cache;
@@ -714,7 +652,7 @@ int main(int argc, char **argv) {
 
     close(ofd);
 
-    printf("\nFinished plotting. %d nonces created in %.1fs; renaming file...\n", nonces, totalcreatetime);
+    printf("\nFinished plotting; renaming file...\n");
 
     unlink(finalname);
 
