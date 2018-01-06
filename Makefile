@@ -1,5 +1,6 @@
 CC=gcc
-CFLAGS=-Wall -m64 -O3 -mtune=native -D_FILE_OFFSET_BITS=64
+#CC=gcc-7
+CFLAGS=-Wall -m64 -O3 -march=native -fomit-frame-pointer -D_FILE_OFFSET_BITS=64
 
 all:		plot64
 

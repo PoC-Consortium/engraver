@@ -35,31 +35,16 @@
 static mshabal256_context sc_ref;
 
 
-inline void memclr64(void *buffer, size_t count)
-{
-    size_t m = count >> 3;
-    int64_t *p = (int64_t *)buffer;
-    for (size_t i = 0; i < m; ++i, ++p)
-        *p = 0;
-    m = count & 7;
-    if (m > 0) {
-        char *b = (char *)p;
-        for (size_t i = 0; i < m; ++i, ++b)
-            *b = 0;
-    }
-}
-
-
 void
 mshabal256_init_buffers(void) {
-    memclr64(sc_ref.buf0, sizeof sc_ref.buf0);
-    memclr64(sc_ref.buf1, sizeof sc_ref.buf1);
-    memclr64(sc_ref.buf2, sizeof sc_ref.buf2);
-    memclr64(sc_ref.buf3, sizeof sc_ref.buf3);
-    memclr64(sc_ref.buf4, sizeof sc_ref.buf4);
-    memclr64(sc_ref.buf5, sizeof sc_ref.buf5);
-    memclr64(sc_ref.buf6, sizeof sc_ref.buf6);
-    memclr64(sc_ref.buf7, sizeof sc_ref.buf7);
+    memset(sc_ref.buf0, 0, sizeof sc_ref.buf0);
+    memset(sc_ref.buf1, 0, sizeof sc_ref.buf1);
+    memset(sc_ref.buf2, 0, sizeof sc_ref.buf2);
+    memset(sc_ref.buf3, 0, sizeof sc_ref.buf3);
+    memset(sc_ref.buf4, 0, sizeof sc_ref.buf4);
+    memset(sc_ref.buf5, 0, sizeof sc_ref.buf5);
+    memset(sc_ref.buf6, 0, sizeof sc_ref.buf6);
+    memset(sc_ref.buf7, 0, sizeof sc_ref.buf7);
     for (uint8_t u = 0; u < 16; u++) {
         uint8_t idx = u * 4;
         sc_ref.buf0[idx] = 256 + u;
@@ -300,7 +285,7 @@ mshabal256_compress(mshabal256_context *sc,
 
 void
 mshabal256_init(mshabal256_context *sc) {
-    memclr64(sc->state, 1408);
+    memset(sc->state, 0, 1408);
     apex_memcpy(sc->buf0, sc_ref.buf0, sizeof sc->buf0);
     apex_memcpy(sc->buf1, sc_ref.buf1, sizeof sc->buf1);
     apex_memcpy(sc->buf2, sc_ref.buf2, sizeof sc->buf2);
@@ -422,14 +407,14 @@ mshabal256_close(mshabal256_context *sc,
     sc->buf7[ptr] = 0x80;
     
     ptr++;
-    memclr64(sc->buf0 + ptr, (sizeof sc->buf0) - ptr);
-    memclr64(sc->buf1 + ptr, (sizeof sc->buf1) - ptr);
-    memclr64(sc->buf2 + ptr, (sizeof sc->buf2) - ptr);
-    memclr64(sc->buf3 + ptr, (sizeof sc->buf3) - ptr);
-    memclr64(sc->buf4 + ptr, (sizeof sc->buf4) - ptr);
-    memclr64(sc->buf5 + ptr, (sizeof sc->buf5) - ptr);
-    memclr64(sc->buf6 + ptr, (sizeof sc->buf6) - ptr);
-    memclr64(sc->buf7 + ptr, (sizeof sc->buf7) - ptr);
+    memset(sc->buf0 + ptr, 0, (sizeof sc->buf0) - ptr);
+    memset(sc->buf1 + ptr, 0, (sizeof sc->buf1) - ptr);
+    memset(sc->buf2 + ptr, 0, (sizeof sc->buf2) - ptr);
+    memset(sc->buf3 + ptr, 0, (sizeof sc->buf3) - ptr);
+    memset(sc->buf4 + ptr, 0, (sizeof sc->buf4) - ptr);
+    memset(sc->buf5 + ptr, 0, (sizeof sc->buf5) - ptr);
+    memset(sc->buf6 + ptr, 0, (sizeof sc->buf6) - ptr);
+    memset(sc->buf7 + ptr, 0, (sizeof sc->buf7) - ptr);
 
     mshabal256_compress(sc, sc->buf0, sc->buf1, sc->buf2, sc->buf3, sc->buf4, sc->buf5, sc->buf6, sc->buf7, 1);
     if (!sc->Wlow--) sc->Whigh--;
