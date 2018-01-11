@@ -21,7 +21,6 @@
 
 #include <stdint.h>
 #include <immintrin.h>
-#include "apex_memmove.h"
 #include "mshabal256.h"
 
 #ifdef  __cplusplus
@@ -286,14 +285,14 @@ mshabal256_compress(mshabal256_context *sc,
 void
 mshabal256_init(mshabal256_context *sc) {
     memset(sc->state, 0, 1408);
-    apex_memcpy(sc->buf0, sc_ref.buf0, sizeof sc->buf0);
-    apex_memcpy(sc->buf1, sc_ref.buf1, sizeof sc->buf1);
-    apex_memcpy(sc->buf2, sc_ref.buf2, sizeof sc->buf2);
-    apex_memcpy(sc->buf3, sc_ref.buf3, sizeof sc->buf3);
-    apex_memcpy(sc->buf4, sc_ref.buf4, sizeof sc->buf4);
-    apex_memcpy(sc->buf5, sc_ref.buf5, sizeof sc->buf5);
-    apex_memcpy(sc->buf6, sc_ref.buf6, sizeof sc->buf6);
-    apex_memcpy(sc->buf7, sc_ref.buf7, sizeof sc->buf7);
+    memcpy(sc->buf0, sc_ref.buf0, sizeof sc->buf0);
+    memcpy(sc->buf1, sc_ref.buf1, sizeof sc->buf1);
+    memcpy(sc->buf2, sc_ref.buf2, sizeof sc->buf2);
+    memcpy(sc->buf3, sc_ref.buf3, sizeof sc->buf3);
+    memcpy(sc->buf4, sc_ref.buf4, sizeof sc->buf4);
+    memcpy(sc->buf5, sc_ref.buf5, sizeof sc->buf5);
+    memcpy(sc->buf6, sc_ref.buf6, sizeof sc->buf6);
+    memcpy(sc->buf7, sc_ref.buf7, sizeof sc->buf7);
     sc->Whigh = sc->Wlow = C32(0xFFFFFFFF);
     mshabal256_compress(sc, sc->buf0, sc->buf1, sc->buf2, sc->buf3, sc->buf4, sc->buf5, sc->buf6, sc->buf7, 1);
     for (uint8_t u = 0; u < 16; u++) {
@@ -333,26 +332,26 @@ mshabal256(mshabal256_context *sc,
 
         clen = (sizeof sc->buf0 - ptr);
         if (clen > len) {
-            apex_memcpy(sc->buf0 + ptr, data0, len);
-            apex_memcpy(sc->buf1 + ptr, data1, len);
-            apex_memcpy(sc->buf2 + ptr, data2, len);
-            apex_memcpy(sc->buf3 + ptr, data3, len);
-            apex_memcpy(sc->buf4 + ptr, data4, len);
-            apex_memcpy(sc->buf5 + ptr, data5, len);
-            apex_memcpy(sc->buf6 + ptr, data6, len);
-            apex_memcpy(sc->buf7 + ptr, data7, len);
+            memcpy(sc->buf0 + ptr, data0, len);
+            memcpy(sc->buf1 + ptr, data1, len);
+            memcpy(sc->buf2 + ptr, data2, len);
+            memcpy(sc->buf3 + ptr, data3, len);
+            memcpy(sc->buf4 + ptr, data4, len);
+            memcpy(sc->buf5 + ptr, data5, len);
+            memcpy(sc->buf6 + ptr, data6, len);
+            memcpy(sc->buf7 + ptr, data7, len);
             sc->ptr = ptr + len;
             return;
         }
         else {
-            apex_memcpy(sc->buf0 + ptr, data0, clen);
-            apex_memcpy(sc->buf1 + ptr, data1, clen);
-            apex_memcpy(sc->buf2 + ptr, data2, clen);
-            apex_memcpy(sc->buf3 + ptr, data3, clen);
-            apex_memcpy(sc->buf4 + ptr, data4, clen);
-            apex_memcpy(sc->buf5 + ptr, data5, clen);
-            apex_memcpy(sc->buf6 + ptr, data6, clen);
-            apex_memcpy(sc->buf7 + ptr, data7, clen);
+            memcpy(sc->buf0 + ptr, data0, clen);
+            memcpy(sc->buf1 + ptr, data1, clen);
+            memcpy(sc->buf2 + ptr, data2, clen);
+            memcpy(sc->buf3 + ptr, data3, clen);
+            memcpy(sc->buf4 + ptr, data4, clen);
+            memcpy(sc->buf5 + ptr, data5, clen);
+            memcpy(sc->buf6 + ptr, data6, clen);
+            memcpy(sc->buf7 + ptr, data7, clen);
             mshabal256_compress(sc, sc->buf0, sc->buf1, sc->buf2, sc->buf3, sc->buf4, sc->buf5, sc->buf6, sc->buf7, 1);
             data0 = (const uint8_t *)data0 + clen;
             data1 = (const uint8_t *)data1 + clen;
@@ -380,14 +379,14 @@ mshabal256(mshabal256_context *sc,
         data7 = (const uint8_t *)data7 + num;
     }
     len &= (size_t)63;
-    apex_memcpy(sc->buf0, data0, len);
-    apex_memcpy(sc->buf1, data1, len);
-    apex_memcpy(sc->buf2, data2, len);
-    apex_memcpy(sc->buf3, data3, len);
-    apex_memcpy(sc->buf4, data4, len);
-    apex_memcpy(sc->buf5, data5, len);
-    apex_memcpy(sc->buf6, data6, len);
-    apex_memcpy(sc->buf7, data7, len);
+    memcpy(sc->buf0, data0, len);
+    memcpy(sc->buf1, data1, len);
+    memcpy(sc->buf2, data2, len);
+    memcpy(sc->buf3, data3, len);
+    memcpy(sc->buf4, data4, len);
+    memcpy(sc->buf5, data5, len);
+    memcpy(sc->buf6, data6, len);
+    memcpy(sc->buf7, data7, len);
     sc->ptr = len;
 }
 

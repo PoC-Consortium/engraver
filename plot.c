@@ -22,7 +22,6 @@
 #include <sys/time.h>
 #include <byteswap.h>
 
-#include "apex_memmove.h"
 #include "shabal.h"
 #include "mshabal256.h"
 #include "mshabal.h"
@@ -76,7 +75,7 @@ void nonce(uint64_t addr, uint64_t nonce, uint64_t cachepos) {
 
     shabal_init(&init_x, 256);
     for (uint32_t i = NONCE_SIZE; i > 0; i -= HASH_SIZE) {
-        apex_memmove(&x, &init_x, sizeof(init_x));
+        memmove(&x, &init_x, sizeof(init_x));
         len -= i;
         if (len > HASH_CAP)
             len = HASH_CAP;
@@ -101,7 +100,7 @@ void nonce(uint64_t addr, uint64_t nonce, uint64_t cachepos) {
 
     // Sort them:
     for (uint32_t i = 0; i < NONCE_SIZE; i += SCOOP_SIZE)
-        apex_memmove(&cache[cachepos * SCOOP_SIZE + (uint64_t)i * staggersize], &gendata[i], SCOOP_SIZE);
+        memmove(&cache[cachepos * SCOOP_SIZE + (uint64_t)i * staggersize], &gendata[i], SCOOP_SIZE);
 }
 
 /* }}} */
@@ -155,10 +154,10 @@ mnonce(uint64_t addr,
 
     // Sort them:
     for (int i = 0; i < NONCE_SIZE; i += 64) {
-        apex_memmove(&cache[cachepos1 * 64 + (uint64_t)i * staggersize], &gendata1[i], 64);
-        apex_memmove(&cache[cachepos2 * 64 + (uint64_t)i * staggersize], &gendata2[i], 64);
-        apex_memmove(&cache[cachepos3 * 64 + (uint64_t)i * staggersize], &gendata3[i], 64);
-        apex_memmove(&cache[cachepos4 * 64 + (uint64_t)i * staggersize], &gendata4[i], 64);
+        memmove(&cache[cachepos1 * 64 + (uint64_t)i * staggersize], &gendata1[i], 64);
+        memmove(&cache[cachepos2 * 64 + (uint64_t)i * staggersize], &gendata2[i], 64);
+        memmove(&cache[cachepos3 * 64 + (uint64_t)i * staggersize], &gendata3[i], 64);
+        memmove(&cache[cachepos4 * 64 + (uint64_t)i * staggersize], &gendata4[i], 64);
     }
 
     return 0;
@@ -237,14 +236,14 @@ m256nonce(uint64_t addr,
 
     // Sort them:
     for (int i = 0; i < NONCE_SIZE; i += 64) {
-      apex_memmove(&cache[cachepos * 64 +       (uint64_t)i * staggersize], &gendata1[i], 64);
-      apex_memmove(&cache[cachepos * 64 +  64 + (uint64_t)i * staggersize], &gendata2[i], 64);
-      apex_memmove(&cache[cachepos * 64 + 128 + (uint64_t)i * staggersize], &gendata3[i], 64);
-      apex_memmove(&cache[cachepos * 64 + 192 + (uint64_t)i * staggersize], &gendata4[i], 64);
-      apex_memmove(&cache[cachepos * 64 + 256 + (uint64_t)i * staggersize], &gendata5[i], 64);
-      apex_memmove(&cache[cachepos * 64 + 320 + (uint64_t)i * staggersize], &gendata6[i], 64);
-      apex_memmove(&cache[cachepos * 64 + 384 + (uint64_t)i * staggersize], &gendata7[i], 64);
-      apex_memmove(&cache[cachepos * 64 + 448 + (uint64_t)i * staggersize], &gendata8[i], 64);
+      memmove(&cache[cachepos * 64 +       (uint64_t)i * staggersize], &gendata1[i], 64);
+      memmove(&cache[cachepos * 64 +  64 + (uint64_t)i * staggersize], &gendata2[i], 64);
+      memmove(&cache[cachepos * 64 + 128 + (uint64_t)i * staggersize], &gendata3[i], 64);
+      memmove(&cache[cachepos * 64 + 192 + (uint64_t)i * staggersize], &gendata4[i], 64);
+      memmove(&cache[cachepos * 64 + 256 + (uint64_t)i * staggersize], &gendata5[i], 64);
+      memmove(&cache[cachepos * 64 + 320 + (uint64_t)i * staggersize], &gendata6[i], 64);
+      memmove(&cache[cachepos * 64 + 384 + (uint64_t)i * staggersize], &gendata7[i], 64);
+      memmove(&cache[cachepos * 64 + 448 + (uint64_t)i * staggersize], &gendata8[i], 64);
     }
 
     return 0;
@@ -324,11 +323,11 @@ writecache(void *arguments) {
     percent = 100.0 * (double)lastrun / (double)nonces;
 
     if (asyncmode == 1) {
-        printf("\33[2K\r%.1f Percent done. %d nonces created in %.1f seconds. (ASYNC write)\r\n", percent, (int)staggersize, createtime);
+        printf("\33[2K\r%.1f Percent done. %d nonces created in %.1f seconds. (ASYNC write)", percent, (int)staggersize, createtime);
         fflush(stdout);
     }
     else {
-        printf("\33[2K\r%.1f Percent done. %d nonces created in %.1f seconds. (write)\r\n", percent, (int)staggersize, createtime);
+        printf("\33[2K\r%.1f Percent done. %d nonces created in %.1f seconds. (write)", percent, (int)staggersize, createtime);
         fflush(stdout);
     }
 
@@ -336,11 +335,11 @@ writecache(void *arguments) {
         uint64_t cacheposition = thisnonce * cacheblocksize;
         uint64_t fileposition  = (uint64_t)(thisnonce * (uint64_t)nonces * (uint64_t)SCOOP_SIZE + thisrun * (uint64_t)SCOOP_SIZE);
         if ( lseek64(ofd, fileposition, SEEK_SET) < 0 ) {
-            printf("\n\nError while lseek()ing in file: %d\n\n", errno);
+            printf("\r\nError while lseek()ing in file: %d\r\n", errno);
             exit(1);
         }
         if ( write(ofd, &wcache[cacheposition], cacheblocksize) < 0 ) {
-            printf("\n\nError while writing to file: %d\n\n", errno);
+            printf("\r\nError while writing to file: %d\r\n", errno);
             exit(1);
         }
     }
@@ -354,7 +353,7 @@ writecache(void *arguments) {
     int    h       = (int)(m / 60);
     m -= h * 60;
 
-    printf("\33[2K\r%.1f Percent done. %i nonces/minute, %i:%02i left\r\n", percent, speed, h, m);
+    printf("\33[2K\r%.1f Percent done. %i nonces/minute, %i:%02i left", percent, speed, h, m);
     fflush(stdout);
 
     return NULL;
@@ -473,7 +472,7 @@ int main(int argc, char **argv) {
             case 'd':
                 ds = strlen(parse);
                 outputdir = (char*) malloc(ds + 2);
-                apex_memmove(outputdir, parse, ds);
+                memcpy(outputdir, parse, ds);
                 // Add final slash?
                 if (outputdir[ds - 1] != '/') {
                     outputdir[ds] = '/';
