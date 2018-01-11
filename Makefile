@@ -26,8 +26,5 @@ mshabal256_avx2.o: mshabal256_avx2.c
 test:		plot64
 		./test.pl
 
-list:
-		$(CC) $(CFLAGS) shabal64.o helper64.o mshabal_sse4.o mshabal256_avx2.o -lpthread -std=gnu99 -Wa,-adhln -g plot.c > plot.s
-
 clean:
 		rm -f mshabal_sse4.o mshabal256_avx2.o shabal64.o helper64.o plot64 helper64.o cg_obup.tgz bin/*
