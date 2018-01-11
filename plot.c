@@ -75,7 +75,7 @@ void nonce(uint64_t addr, uint64_t nonce, uint64_t cachepos) {
 
     shabal_init(&init_x, 256);
     for (uint32_t i = NONCE_SIZE; i > 0; i -= HASH_SIZE) {
-        memmove(&x, &init_x, sizeof(init_x));
+        memcpy(&x, &init_x, sizeof(init_x));
         len -= i;
         if (len > HASH_CAP)
             len = HASH_CAP;
