@@ -657,8 +657,6 @@ int main(int argc, char **argv) {
     if (asyncmode == 1) cache = acache[asyncbuf];
     else wcache = cache;
 
-    mshabal256_init_buffers();
-
     for (; run < nonces; run += staggersize) {
         writestatus();
         astarttime = getMS();

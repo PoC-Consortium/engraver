@@ -31,42 +31,6 @@
 #define T32(x)         ((x) & C32(0xFFFFFFFF))
 #define ROTL32(x, n)   T32(((x) << (n)) | ((x) >> (32 - (n))))
 
-static mshabal256_context sc_ref;
-
-
-void
-mshabal256_init_buffers(void) {
-    memset(sc_ref.buf0, 0, sizeof sc_ref.buf0);
-    memset(sc_ref.buf1, 0, sizeof sc_ref.buf1);
-    memset(sc_ref.buf2, 0, sizeof sc_ref.buf2);
-    memset(sc_ref.buf3, 0, sizeof sc_ref.buf3);
-    memset(sc_ref.buf4, 0, sizeof sc_ref.buf4);
-    memset(sc_ref.buf5, 0, sizeof sc_ref.buf5);
-    memset(sc_ref.buf6, 0, sizeof sc_ref.buf6);
-    memset(sc_ref.buf7, 0, sizeof sc_ref.buf7);
-    for (uint8_t u = 0; u < 16; u++) {
-        uint8_t idx = u * 4;
-        sc_ref.buf0[idx] = 256 + u;
-        sc_ref.buf1[idx] = 256 + u;
-        sc_ref.buf2[idx] = 256 + u;
-        sc_ref.buf3[idx] = 256 + u;
-        sc_ref.buf4[idx] = 256 + u;
-        sc_ref.buf5[idx] = 256 + u;
-        sc_ref.buf6[idx] = 256 + u;
-        sc_ref.buf7[idx] = 256 + u;
-        idx++;
-        sc_ref.buf0[idx] = 1;
-        sc_ref.buf1[idx] = 1;
-        sc_ref.buf2[idx] = 1;
-        sc_ref.buf3[idx] = 1;
-        sc_ref.buf4[idx] = 1;
-        sc_ref.buf5[idx] = 1;
-        sc_ref.buf6[idx] = 1;
-        sc_ref.buf7[idx] = 1;
-    }
-}
-
-
 static void
 mshabal256_compress(mshabal256_context *sc,
                     const uint8_t *buf0, const uint8_t *buf1,
@@ -281,18 +245,38 @@ mshabal256_compress(mshabal256_context *sc,
 #undef M
 }
 
-
 void
 mshabal256_init(mshabal256_context *sc) {
     memset(sc->state, 0, 1408);
-    memcpy(sc->buf0, sc_ref.buf0, sizeof sc->buf0);
-    memcpy(sc->buf1, sc_ref.buf1, sizeof sc->buf1);
-    memcpy(sc->buf2, sc_ref.buf2, sizeof sc->buf2);
-    memcpy(sc->buf3, sc_ref.buf3, sizeof sc->buf3);
-    memcpy(sc->buf4, sc_ref.buf4, sizeof sc->buf4);
-    memcpy(sc->buf5, sc_ref.buf5, sizeof sc->buf5);
-    memcpy(sc->buf6, sc_ref.buf6, sizeof sc->buf6);
-    memcpy(sc->buf7, sc_ref.buf7, sizeof sc->buf7);
+    
+    memset(sc->buf0, 0, sizeof sc->buf0);
+    memset(sc->buf1, 0, sizeof sc->buf1);
+    memset(sc->buf2, 0, sizeof sc->buf2);
+    memset(sc->buf3, 0, sizeof sc->buf3);
+    memset(sc->buf4, 0, sizeof sc->buf4);
+    memset(sc->buf5, 0, sizeof sc->buf5);
+    memset(sc->buf6, 0, sizeof sc->buf6);
+    memset(sc->buf7, 0, sizeof sc->buf7);
+    for (uint8_t u = 0; u < 16; u++) {
+        uint8_t idx = u * 4;
+        sc->buf0[idx] = 256 + u;
+        sc->buf1[idx] = 256 + u;
+        sc->buf2[idx] = 256 + u;
+        sc->buf3[idx] = 256 + u;
+        sc->buf4[idx] = 256 + u;
+        sc->buf5[idx] = 256 + u;
+        sc->buf6[idx] = 256 + u;
+        sc->buf7[idx] = 256 + u;
+        idx++;
+        sc->buf0[idx] = 1;
+        sc->buf1[idx] = 1;
+        sc->buf2[idx] = 1;
+        sc->buf3[idx] = 1;
+        sc->buf4[idx] = 1;
+        sc->buf5[idx] = 1;
+        sc->buf6[idx] = 1;
+        sc->buf7[idx] = 1;
+    }
     sc->Whigh = sc->Wlow = C32(0xFFFFFFFF);
     mshabal256_compress(sc, sc->buf0, sc->buf1, sc->buf2, sc->buf3, sc->buf4, sc->buf5, sc->buf6, sc->buf7, 1);
     for (uint8_t u = 0; u < 16; u++) {
