@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS=-Wall -m64 -O3 -march=native -fomit-frame-pointer -D_FILE_OFFSET_BITS=64
+CFLAGS=-Wall -m64 -O3 -mtune=skylake -D_FILE_OFFSET_BITS=64
 
 all:		plot64
 
@@ -8,7 +8,7 @@ dist:		clean all
 		mv plot64 bin
 		tar -czf cg_obup.tgz *
 
-plot64:	        plot.c shabal64.o helper64.o mshabal_sse4.o mshabal256_avx2.o
+plot64:	        plot.c shabal64.o helper64.o mshabal_sse4.o mshabal256_avx2.o 
 		$(CC) $(CFLAGS) -o plot64 plot.c shabal64.o helper64.o mshabal_sse4.o mshabal256_avx2.o -lpthread -std=gnu99
 
 helper64.o:	helper.c
@@ -22,6 +22,7 @@ mshabal_sse4.o: mshabal_sse4.c
 
 mshabal256_avx2.o: mshabal256_avx2.c
 		$(CC) $(CFLAGS) -mavx2 -c -o mshabal256_avx2.o mshabal256_avx2.c
+
 
 test:		plot64
 		./test.pl

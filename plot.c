@@ -20,7 +20,6 @@
 #include <pthread.h>
 #include <time.h>
 #include <sys/time.h>
-#include <byteswap.h>
 
 #include "shabal.h"
 #include "mshabal256.h"
@@ -49,15 +48,22 @@ uint32_t selecttype  = 0;
 uint32_t asyncmode   = 0;
 double createtime    = 0.0;
 uint64_t starttime;
-uint64_t run         = 0;
-uint64_t lastrun, thisrun;
+uint64_t run, lastrun, thisrun;
 int ofd;
 
 char *cache, *wcache, *acache[2];
 char *outputdir = DEFAULTDIR;
 
 #define SET_NONCE(gendata, nonce, offset)      \
-    *(uint64_t *)(gendata + NONCE_SIZE + offset) = bswap_64(nonce)
+    xv = (char*)&nonce;                        \
+    gendata[NONCE_SIZE + offset]     = xv[7];  \
+    gendata[NONCE_SIZE + offset + 1] = xv[6];  \
+    gendata[NONCE_SIZE + offset + 2] = xv[5];  \
+    gendata[NONCE_SIZE + offset + 3] = xv[4];  \
+    gendata[NONCE_SIZE + offset + 4] = xv[3];  \
+    gendata[NONCE_SIZE + offset + 5] = xv[2];  \
+    gendata[NONCE_SIZE + offset + 6] = xv[1];  \
+    gendata[NONCE_SIZE + offset + 7] = xv[0]
 
 /* }}} */
 
@@ -66,7 +72,8 @@ char *outputdir = DEFAULTDIR;
 void nonce(uint64_t addr, uint64_t nonce, uint64_t cachepos) {
     char final[32];
     char gendata[16 + NONCE_SIZE];
-
+    char *xv;
+        
     SET_NONCE(gendata, addr,  0);
     SET_NONCE(gendata, nonce, 8);
 
@@ -112,6 +119,8 @@ mnonce(uint64_t addr,
        uint64_t cachepos1, uint64_t cachepos2, uint64_t cachepos3, uint64_t cachepos4) {
     char final1[32], final2[32], final3[32], final4[32];
     char gendata1[16 + NONCE_SIZE], gendata2[16 + NONCE_SIZE], gendata3[16 + NONCE_SIZE], gendata4[16 + NONCE_SIZE];
+
+    char *xv;
 
     SET_NONCE(gendata1, addr,  0);
 
@@ -175,6 +184,8 @@ m256nonce(uint64_t addr,
     char final5[32], final6[32], final7[32], final8[32];
     char gendata1[16 + NONCE_SIZE], gendata2[16 + NONCE_SIZE], gendata3[16 + NONCE_SIZE], gendata4[16 + NONCE_SIZE];
     char gendata5[16 + NONCE_SIZE], gendata6[16 + NONCE_SIZE], gendata7[16 + NONCE_SIZE], gendata8[16 + NONCE_SIZE];
+
+    char *xv;
 
     SET_NONCE(gendata1, addr,  0);
 
@@ -256,15 +267,13 @@ work_i(void *x_void_ptr) {
     uint64_t i = *(uint64_t *)x_void_ptr;
 
     uint32_t n;
-    uint64_t o;
 
     if (selecttype == 2) { // AVX2
-        for (n = 0; n < noncesperthread; n += 8) {
-            o = i + n;
+        for (n = 0; n < noncesperthread; n += 8) {            
             m256nonce(addr,
-                      (o + 0), (o + 1), (o + 2), (o + 3),
-                      (o + 4), (o + 5), (o + 6), (o + 7),
-                      (o - startnonce));
+                      (i + n + 0), (i + n + 1), (i + n + 2), (i + n + 3),
+                      (i + n + 4), (i + n + 5), (i + n + 6), (i + n + 7),
+                      (i - startnonce + n));
         }
     }
     else {
@@ -319,16 +328,16 @@ void *
 writecache(void *arguments) {
     uint64_t cacheblocksize = staggersize * SCOOP_SIZE;
     uint64_t thisnonce;
-    double percent;
+    int percent;
 
-    percent = 100.0 * (double)lastrun / (double)nonces;
+    percent = (int)(100 * lastrun / nonces);
 
     if (asyncmode == 1) {
-        printf("\33[2K\r%.1f Percent done. %d nonces created in %.1f seconds. (ASYNC write)\r\n", percent, (int)staggersize, createtime);
+        printf("\33[2K\r%i Percent done. (ASYNC write)", percent);
         fflush(stdout);
     }
     else {
-        printf("\33[2K\r%.1f Percent done. %d nonces created in %.1f seconds. (write)\r\n", percent, (int)staggersize, createtime);
+        printf("\33[2K\r%i Percent done. (write)", percent);
         fflush(stdout);
     }
 
@@ -336,25 +345,25 @@ writecache(void *arguments) {
         uint64_t cacheposition = thisnonce * cacheblocksize;
         uint64_t fileposition  = (uint64_t)(thisnonce * (uint64_t)nonces * (uint64_t)SCOOP_SIZE + thisrun * (uint64_t)SCOOP_SIZE);
         if ( lseek64(ofd, fileposition, SEEK_SET) < 0 ) {
-            printf("\r\nError while lseek()ing in file: %d\r\n", errno);
+            printf("\n\nError while lseek()ing in file: %d\n\n", errno);
             exit(1);
         }
         if ( write(ofd, &wcache[cacheposition], cacheblocksize) < 0 ) {
-            printf("\r\nError while writing to file: %d\r\n", errno);
+            printf("\n\nError while writing to file: %d\n\n", errno);
             exit(1);
         }
     }
 
     uint64_t ms = getMS() - starttime;
-
-    percent = 100.0 * (double)lastrun / (double)nonces;
+        
+    percent = (int)(100 * lastrun / nonces);
     double minutes = (double)ms / (1000000 * 60);
     int    speed   = (int)(staggersize / minutes);
     int    m       = (int)(nonces - run) / speed;
     int    h       = (int)(m / 60);
     m -= h * 60;
 
-    printf("\33[2K\r%.1f Percent done. %i nonces/minute, %i:%02i left\r\n", percent, speed, h, m);
+    printf("\33[2K\r%i Percent done. %i nonces/minute, %i:%02i left", percent, speed, h, m);
     fflush(stdout);
 
     return NULL;
@@ -482,6 +491,7 @@ int main(int argc, char **argv) {
                 else {
                     outputdir[ds] = 0;
                 }
+                                        
             }                       
         }
     }
