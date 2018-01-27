@@ -46,6 +46,7 @@ uint32_t threads     = 0;
 uint32_t noncesperthread;
 uint32_t selecttype  = 0;
 uint32_t asyncmode   = 0;
+double createtime    = 0.0;
 uint64_t starttime;
 uint64_t run, lastrun, thisrun;
 int ofd;
@@ -315,7 +316,7 @@ getMS() {
 /* {{{ usage */
 
 void usage(char **argv) {
-    printf("Usage: %s -k KEY [ -x CORE ] [-d DIRECTORY] [-s STARTNONCE] [-n NONCES] [-m STAGGERSIZE] [-t THREADS] -a\n\n", argv[0]);
+    printf("Usage: %s -k KEY [ -x CORE ] [-d DIRECTORY] [-s STARTNONCE] [-n NONCES] [-m STAGGERSIZE] [-t THREADS] [-a] [-R]\n\n", argv[0]);
     printf("   see README.md\n");
     exit(-1);
 }
@@ -370,6 +371,28 @@ writecache(void *arguments) {
 
 /* }}} */
 
+/* {{{ writestatus */
+
+void
+writestatus(void) {
+    // Write current status to the end of the file
+    if ( lseek64(ofd, -32, SEEK_END) < 0 ) {
+        printf("\n\nError while lseek()ing in file: %d\n\n", errno);
+        exit(1);
+    }
+    // Write (uint64_t)run, (uint64_t)startnonce, (uint32_t)staggersize
+    if ( write(ofd, &run, sizeof run) < 0 ) {
+        printf("\n\nError while writing to file: %d\n\n", errno);
+        exit(1);
+    }
+    if ( write(ofd, &startnonce, sizeof startnonce) < 0 ) {
+        printf("\n\nError while writing to file: %d\n\n", errno);
+        exit(1);
+    }
+}
+
+/* }}} */
+
 /* {{{ main */
 
 int main(int argc, char **argv) {
@@ -379,6 +402,7 @@ int main(int argc, char **argv) {
     
     int i;
     int startgiven = 0;
+    int resume = 0;
     for (uint8_t i = 1; i < argc; i++) {
         // Ignore unknown argument
         if(argv[i][0] != '-')
@@ -387,6 +411,11 @@ int main(int argc, char **argv) {
         if (!strcmp(argv[i],"-a")) {
             asyncmode = 1;
             printf("Async mode set.\n");
+            continue;
+        }
+
+        if (!strcmp(argv[i],"-R")) {
+            resume = 1;
             continue;
         }
 
@@ -568,7 +597,12 @@ int main(int argc, char **argv) {
     sprintf(name, "%s%"PRIu64"_%"PRIu64"_%u_%u.plotting", outputdir, addr, startnonce, nonces, nonces);
     sprintf(finalname, "%s%"PRIu64"_%"PRIu64"_%u_%u", outputdir, addr, startnonce, nonces, nonces);
 
-    unlink(name); // no need to see if file exists: unlink can handle that
+    int readconfig = 0;
+    if ( !resume ) {
+        unlink(name); // no need to see if file exists: unlink can handle that
+    } else if( access( name, F_OK ) != -1 ) {
+        readconfig = 1;
+    }
 
     ofd = open(name, O_CREAT | O_LARGEFILE | O_RDWR, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
     if (ofd < 0) {
@@ -576,14 +610,44 @@ int main(int argc, char **argv) {
         exit(1);
     }
 
-    // pre-allocate space to prevent fragmentation
-    printf("Pre-allocating space for file (%ld bytes)...\n", (uint64_t)nonces * NONCE_SIZE);
-    if ( posix_fallocate(ofd, 0, (uint64_t)nonces * NONCE_SIZE) != 0 ) {
-        printf("File pre-allocation failed.\n");
-        return 1;       
+    if ( readconfig ) {
+        // Read config and initial status to the end of the file
+        if ( lseek64(ofd, -32, SEEK_END) < 0 ) {
+            printf("\n\nError while lseek()ing in file: %d\n\n", errno);
+            exit(1);
+        }
+        // Read (uint64_t)run, (uint64_t)startnonce, (uint32_t)staggersize
+        if ( read(ofd, &run, sizeof run) < sizeof run ) {
+            printf("\n\nError while reading from file: %d\n\n", errno);
+            exit(1);
+        }
+        if ( read(ofd, &startnonce, sizeof startnonce) < sizeof startnonce ) {
+            printf("\n\nError while reading from file: %d\n\n", errno);
+            exit(1);
+        }
+        if ( read(ofd, &staggersize, sizeof staggersize) < sizeof staggersize ) {
+            printf("\n\nError while reading from file: %d\n\n", errno);
+            exit(1);
+        }
+        printf("Resuming at nonce %ld with staggersize %d...\n", startnonce, staggersize);
     }
     else {
-        printf("Done pre-allocating space.\n");
+        // pre-allocate space to prevent fragmentation
+        uint64_t filesize = (uint64_t)nonces * NONCE_SIZE;
+        printf("Pre-allocating space for file (%ld bytes)...\n", filesize);
+        if ( posix_fallocate(ofd, 0, filesize) != 0 ) {
+            printf("File pre-allocation failed.\n");
+            return 1;       
+        }
+        else {
+            printf("Done pre-allocating space.\n");
+        }
+
+        writestatus();
+        if ( write(ofd, &staggersize, sizeof staggersize) < 0 ) {
+            printf("\n\nError while writing to file: %d\n\n", errno);
+            exit(1);
+        }
     }
 
     // Threads:
@@ -595,14 +659,17 @@ int main(int argc, char **argv) {
     }
 
     pthread_t worker[threads], writeworker;
+    int workerrunning = 0;
     uint64_t nonceoffset[threads];
 
     int asyncbuf = 0;
+    double totalcreatetime = 0.0;
     uint64_t astarttime;
     if (asyncmode == 1) cache = acache[asyncbuf];
     else wcache = cache;
 
-    for (run = 0; run < nonces; run += staggersize) {
+    for (; run < nonces; run += staggersize) {
+        writestatus();
         astarttime = getMS();
 
         for (i = 0; i < threads; i++) {
@@ -622,9 +689,12 @@ int main(int argc, char **argv) {
             nonce(addr, startnonce + i, (uint64_t)i);
 
         // Write plot to disk:
+        createtime = ((double)getMS() - (double)astarttime) / 1000000.0;
+        totalcreatetime += createtime;
         starttime = astarttime;
         if (asyncmode == 1) {
-            if (run > 0) pthread_join(writeworker, NULL);
+            if (workerrunning) pthread_join(writeworker, NULL);
+            else workerrunning = 1;
             thisrun = run;
             lastrun = run + staggersize;
             wcache = cache;
@@ -652,7 +722,7 @@ int main(int argc, char **argv) {
 
     close(ofd);
 
-    printf("\nFinished plotting; renaming file...\n");
+    printf("\nFinished plotting. %d nonces created in %.1fs; renaming file...\n", nonces, totalcreatetime);
 
     unlink(finalname);
 
