@@ -255,7 +255,8 @@ void *
 work_i(void *x_void_ptr) {
     uint64_t i = *(uint64_t *)x_void_ptr;
 
-    uint32_t n, o;
+    uint32_t n;
+    uint64_t o;
 
     if (selecttype == 2) { // AVX2
         for (n = 0; n < noncesperthread; n += 8) {
@@ -323,11 +324,11 @@ writecache(void *arguments) {
     percent = 100.0 * (double)lastrun / (double)nonces;
 
     if (asyncmode == 1) {
-        printf("\33[2K\r%.1f Percent done. %d nonces created in %.1f seconds. (ASYNC write)", percent, (int)staggersize, createtime);
+        printf("\33[2K\r%.1f Percent done. %d nonces created in %.1f seconds. (ASYNC write)\r\n", percent, (int)staggersize, createtime);
         fflush(stdout);
     }
     else {
-        printf("\33[2K\r%.1f Percent done. %d nonces created in %.1f seconds. (write)", percent, (int)staggersize, createtime);
+        printf("\33[2K\r%.1f Percent done. %d nonces created in %.1f seconds. (write)\r\n", percent, (int)staggersize, createtime);
         fflush(stdout);
     }
 
@@ -353,7 +354,7 @@ writecache(void *arguments) {
     int    h       = (int)(m / 60);
     m -= h * 60;
 
-    printf("\33[2K\r%.1f Percent done. %i nonces/minute, %i:%02i left", percent, speed, h, m);
+    printf("\33[2K\r%.1f Percent done. %i nonces/minute, %i:%02i left\r\n", percent, speed, h, m);
     fflush(stdout);
 
     return NULL;
@@ -366,7 +367,7 @@ writecache(void *arguments) {
 void
 writestatus(void) {
     // Write current status to the end of the file
-    if ( lseek64(ofd, -20, SEEK_END) < 0 ) {
+    if ( lseek64(ofd, -32, SEEK_END) < 0 ) {
         printf("\n\nError while lseek()ing in file: %d\n\n", errno);
         exit(1);
     }
@@ -601,7 +602,7 @@ int main(int argc, char **argv) {
 
     if ( readconfig ) {
         // Read config and initial status to the end of the file
-        if ( lseek64(ofd, -20, SEEK_END) < 0 ) {
+        if ( lseek64(ofd, -32, SEEK_END) < 0 ) {
             printf("\n\nError while lseek()ing in file: %d\n\n", errno);
             exit(1);
         }
