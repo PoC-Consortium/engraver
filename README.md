@@ -41,6 +41,8 @@ rico666 <bots@cryptoguru.org>                 (Don't donate)
 
   -R
     Resume from last position in an existing plot file.
+    IMPORTANT: The plot file has to be created with the resume option to make resume work!
+               Don't use the resume option if the plot file was created without the resume option!
 
   -d <directory>
     Which directory to use. You can give relative as well as absolute paths.
