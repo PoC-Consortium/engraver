@@ -78,14 +78,16 @@ void nonce(uint64_t addr, uint64_t nonce, uint64_t cachepos) {
     SET_NONCE(gendata, nonce, 8);
 
     shabal_context init_x, x;
-    uint32_t len = NONCE_SIZE + 16;
+    uint32_t len;
 
     shabal_init(&init_x, 256);
     for (uint32_t i = NONCE_SIZE; i > 0; i -= HASH_SIZE) {
         memcpy(&x, &init_x, sizeof(init_x));
-        len -= i;
+
+        len = NONCE_SIZE + 16 - i;
         if (len > HASH_CAP)
             len = HASH_CAP;
+
         shabal(&x, &gendata[i], len);
         shabal_close(&x, 0, 0, &gendata[i - HASH_SIZE]);
     }
