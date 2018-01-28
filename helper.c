@@ -100,7 +100,7 @@ unsigned long long freespace(char *path) {
 		printf("Failed to get free disk space on %s\n", path);
 		return 0;
 	}
-	return (unsigned long long)fData.f_bsize * fData.f_bfree;
+	return (unsigned long long)fData.f_bsize * fData.f_bavail;
 }
 
 // Free memory. Taken from http://stackoverflow.com/questions/2513505/how-to-get-available-memory-c-g
