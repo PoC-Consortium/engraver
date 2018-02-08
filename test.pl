@@ -8,8 +8,9 @@ my $plotbin = './plot64';
 # print qx{$plotbin -k 12345 -d core0 -x 0 -s 0 -n 128 -t 4};
 # print qx{md5sum core0/12345_0_128_128};
 
-# print qx{$plotbin -k 12345 -d core1 -x 1 -s 0 -n 128 -t 4};
-# print qx{md5sum core1/12345_0_128_128};
+# result: ff10163154a05900c90e226eeca9a6a0
+print qx{$plotbin -k 12345 -d core1 -x 1 -s 0 -n 128 -t 4};
+print qx{md5sum core1/12345_0_128_128};
 
 print qx{$plotbin -k 11424087411148401423 -d core2 -x 2 -s 0 -n 128 -t 4};
 

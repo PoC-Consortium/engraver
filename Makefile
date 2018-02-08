@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS=-Wall -m64 -O3 -mtune=skylake -D_FILE_OFFSET_BITS=64
+CFLAGS=-Wall -m64 -O3 -mtune=native -D_FILE_OFFSET_BITS=64
 
 all:		plot64
 
