@@ -47,6 +47,7 @@ uint32_t noncesperthread;
 uint32_t selecttype  = 0;
 uint32_t asyncmode   = 0;
 double createtime    = 0.0;
+uint64_t maxmemory   = 0;
 uint64_t starttime;
 uint64_t run, lastrun, thisrun;
 int ofd;
@@ -478,6 +479,9 @@ int main(int argc, char **argv) {
             case 't':
                 threads = parsed;
                 break;
+            case 'b':
+                maxmemory = parsed;
+                break;
             case 'x':
                 selecttype = parsed;
                 break;
@@ -540,14 +544,19 @@ int main(int argc, char **argv) {
 
     // Autodetect stagger size
     if (staggersize == 0) {
-      uint64_t memstag = (freemem() * 0.8) / NONCE_SIZE; // use 80% of memory
+        // Use max 80% (40% if async mode) of total available memory, unless the user has specified a limit
+        uint64_t usememory = (maxmemory > 0) ? maxmemory : freemem() * 0.8;
+        if (asyncmode) {
+            usememory = (uint64_t)usememory / 2;
+        }
 
-
-        if (nonces < memstag) {         // Small stack: all at once
+        uint64_t memstag = usememory / NONCE_SIZE;
+        if (nonces < memstag) {
+            // Small stack: all at once
             staggersize = nonces;
         }
-        else {                          // Determine stagger that (almost) fits nonces
-            
+        else {
+            // Determine stagger that (almost) fits nonces
             for (i = memstag; i >= 1000; i--) {
                 if ((nonces % i) < 1000) {
                     staggersize = i;

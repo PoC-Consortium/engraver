@@ -37,7 +37,11 @@ rico666 <bots@cryptoguru.org>                 (Don't donate)
   -a
     Flag to use asynchronous writing mode. If this is set, the plotter can work
     even while data is being written to disk. It will give you more speed at the
-    cost of more memory usage (will use double the memory!). Dafult is OFF.
+    cost of more memory usage (will use double the memory!). Default is OFF.
+
+  -b <maxmemory>
+    Maximum amount of memory to use. Will automatically be halved when used in
+    combination with -a.
 
   -R
     Resume from last position in an existing plot file.
@@ -101,8 +105,8 @@ If you do not match these numbers, the plotter will refuse to work for SSE4 and 
 cores, the default core will work on any arbitrary number of nonces.
 
 
-For \<startnonce>, \<staggersize> and \<nonces> you can either define just a number or
-add the T/t, G/g, M/m or K/k suffix. E.g. "-s 1234k"
+For \<startnonce>, \<staggersize>, \<nonces> and \<maxmemory> you can either define
+just a number or add the T/t, G/g, M/m or K/k suffix. E.g. "-s 1234k"
 * K/k = 1024
 * M/m = 1024<sup>2</sup>
 * G/g = 1024<sup>3</sup>
