@@ -26,8 +26,6 @@
 #include "mshabal.h"
 #include "helper.h"
 
-// Leave 5GB free space
-#define FREE_SPACE      (uint64_t)5 * 1000 * 1000 * 1000
 #define DEFAULTDIR      "plots/"
 
 // Not to be changed below this
@@ -48,6 +46,7 @@ uint32_t selecttype  = 0;
 uint32_t asyncmode   = 0;
 double createtime    = 0.0;
 uint64_t maxmemory   = 0;
+uint64_t leavespace  = (uint64_t)5*1024*1024*1024;
 uint64_t starttime;
 uint64_t run, lastrun, thisrun;
 int ofd;
@@ -74,7 +73,7 @@ void nonce(uint64_t addr, uint64_t nonce, uint64_t cachepos) {
     char final[32];
     char gendata[16 + NONCE_SIZE];
     char *xv;
-        
+
     SET_NONCE(gendata, addr,  0);
     SET_NONCE(gendata, nonce, 8);
 
@@ -92,7 +91,7 @@ void nonce(uint64_t addr, uint64_t nonce, uint64_t cachepos) {
         shabal(&x, &gendata[i], len);
         shabal_close(&x, 0, 0, &gendata[i - HASH_SIZE]);
     }
-        
+
     shabal_init(&x, 256);
     shabal(&x, gendata, 16 + NONCE_SIZE);
     shabal_close(&x, 0, 0, final);
@@ -272,7 +271,7 @@ work_i(void *x_void_ptr) {
     uint32_t n;
 
     if (selecttype == 2) { // AVX2
-        for (n = 0; n < noncesperthread; n += 8) {            
+        for (n = 0; n < noncesperthread; n += 8) {
             m256nonce(addr,
                       (i + n + 0), (i + n + 1), (i + n + 2), (i + n + 3),
                       (i + n + 4), (i + n + 5), (i + n + 6), (i + n + 7),
@@ -358,7 +357,7 @@ writecache(void *arguments) {
     }
 
     uint64_t ms = getMS() - starttime;
-        
+
     percent = (int)(100 * lastrun / nonces);
     double minutes = (double)ms / (1000000 * 60);
     int    speed   = (int)(staggersize / minutes);
@@ -402,7 +401,7 @@ int main(int argc, char **argv) {
     if (argc < 2) {
         usage(argv);
     }
-    
+
     int i;
     int startgiven = 0;
     int resume = 0;
@@ -466,7 +465,7 @@ int main(int argc, char **argv) {
                 }
                 else {
                     nonces = parsed;
-                }       
+                }
                 break;
             case 'm':
                 if (modified == 1) {
@@ -474,13 +473,16 @@ int main(int argc, char **argv) {
                 }
                 else {
                     staggersize = parsed;
-                }       
+                }
                 break;
             case 't':
                 threads = parsed;
                 break;
             case 'b':
                 maxmemory = parsed;
+                break;
+            case 'f':
+                leavespace = parsed;
                 break;
             case 'x':
                 selecttype = parsed;
@@ -497,8 +499,7 @@ int main(int argc, char **argv) {
                 else {
                     outputdir[ds] = 0;
                 }
-                                        
-            }                       
+            }
         }
     }
 
@@ -532,13 +533,13 @@ int main(int argc, char **argv) {
 
     // No nonces given: use whole disk
     if (nonces == 0) {
-      uint64_t fs = freespace(outputdir);
-        if (fs <= FREE_SPACE) {
+        uint64_t fs = freespace(outputdir);
+        if (fs <= leavespace) {
             printf("Not enough free space on device\n");
             exit(-1);
         }
-        fs -= FREE_SPACE;
-                                
+        fs -= leavespace;
+
         nonces = (uint64_t)(fs / NONCE_SIZE);
     }
 
@@ -648,7 +649,7 @@ int main(int argc, char **argv) {
         printf("Pre-allocating space for file (%ld bytes)...\n", filesize);
         if ( posix_fallocate(ofd, 0, filesize) != 0 ) {
             printf("File pre-allocation failed.\n");
-            return 1;       
+            return 1;
         }
         else {
             printf("Done pre-allocating space.\n");
@@ -712,8 +713,8 @@ int main(int argc, char **argv) {
             if (pthread_create(&writeworker, NULL, writecache, (void *)NULL)) {
                 printf("Error creating thread. Out of memory? Try lower stagger size / less threads / remove async mode\n");
                 exit(-1);
-            }       
-            asyncbuf = 1 - asyncbuf;                    
+            }
+            asyncbuf = 1 - asyncbuf;
             cache = acache[asyncbuf];
         }
         else {
@@ -728,7 +729,7 @@ int main(int argc, char **argv) {
 
         startnonce += staggersize;
     }
-        
+
     if (asyncmode == 1) pthread_join(writeworker, NULL);
 
     close(ofd);

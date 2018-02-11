@@ -52,7 +52,11 @@ rico666 <bots@cryptoguru.org>                 (Don't donate)
     Which directory to use. You can give relative as well as absolute paths.
     If you omit this, plots are written into the 'plots' directory in the
     current path.
-    
+
+  -f <diskspace>
+    When -n is not specified, leave this much disk space while calculating number
+    of nonces to plot.
+
   -m <staggersize>
     In this version, you can think of this as the memory cache used by the program
     before a write to the disk is necessary. Obviously the more you give here, the
@@ -105,13 +109,14 @@ If you do not match these numbers, the plotter will refuse to work for SSE4 and 
 cores, the default core will work on any arbitrary number of nonces.
 
 
-For \<startnonce>, \<staggersize>, \<nonces> and \<maxmemory> you can either define
-just a number or add the T/t, G/g, M/m or K/k suffix. E.g. "-s 1234k"
+For \<startnonce>, \<staggersize>, \<nonces>, \<maxmemory> and \<diskspace> you can
+either define just a number or add the T/t, G/g, M/m or K/k suffix. E.g. "-s 1234k"
 * K/k = 1024
 * M/m = 1024<sup>2</sup>
 * G/g = 1024<sup>3</sup>
 * T/t = 1024<sup>4</sup>
-in which case the definition is not the number of nonces, but the memory used.
+in which case the definitions for \<staggersize> and \<nonces> are not the number of
+nonces, but the memory used.
 
 ### TODO:
 
