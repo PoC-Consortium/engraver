@@ -41,7 +41,7 @@ uint64_t startnonce  = 0;
 uint32_t nonces      = 0;
 uint32_t staggersize = 0;
 uint32_t threads     = 0;
-uint32_t noncesperthread;
+uint32_t noncesperthread, noncearguments;
 uint32_t selecttype  = 0;
 uint32_t asyncmode   = 0;
 double createtime    = 0.0;
@@ -270,37 +270,25 @@ work_i(void *x_void_ptr) {
 
     uint32_t n;
 
-    if (selecttype == 2) { // AVX2
-        for (n = 0; n < noncesperthread; n += 8) {
+    for (n = 0; n < noncesperthread; n += noncearguments) {
+        if (selecttype == 1) { // SSE4
+            mnonce(addr,
+                    (i + n), (i + n + 1), (i + n + 2), (i + n + 3),
+                    (uint64_t)(i - startnonce + n),
+                    (uint64_t)(i - startnonce + n + 1),
+                    (uint64_t)(i - startnonce + n + 2),
+                    (uint64_t)(i - startnonce + n + 3));
+        }
+        if (selecttype == 2) { // AVX2
             m256nonce(addr,
-                      (i + n + 0), (i + n + 1), (i + n + 2), (i + n + 3),
-                      (i + n + 4), (i + n + 5), (i + n + 6), (i + n + 7),
-                      (i - startnonce + n));
+                    (i + n + 0), (i + n + 1), (i + n + 2), (i + n + 3),
+                    (i + n + 4), (i + n + 5), (i + n + 6), (i + n + 7),
+                    (i - startnonce + n));
+        }
+        else { // STANDARD
+            nonce(addr, (i + n), (uint64_t)(i - startnonce + n));
         }
     }
-    else {
-        for (n = 0; n < noncesperthread; n++) {
-            if (selecttype == 1) { // SSE4
-                if (n + 4 <= noncesperthread) {
-                    mnonce(addr,
-                           (i + n), (i + n + 1), (i + n + 2), (i + n + 3),
-                           (uint64_t)(i - startnonce + n),
-                           (uint64_t)(i - startnonce + n + 1),
-                           (uint64_t)(i - startnonce + n + 2),
-                           (uint64_t)(i - startnonce + n + 3));
-                    n += 3;
-                }
-                else {
-                    printf("SSE4 inefficiency\n");
-                    nonce(addr,(i + n), (uint64_t)(i - startnonce + n));
-                }
-            }
-            else { // STANDARD
-                nonce(addr, (i + n), (uint64_t)(i - startnonce + n));
-            }
-        }
-    }
-
     return NULL;
 }
 
@@ -318,7 +306,7 @@ getMS() {
 /* {{{ usage */
 
 void usage(char **argv) {
-    printf("Usage: %s -k KEY [ -x CORE ] [-d DIRECTORY] [-s STARTNONCE] [-n NONCES] [-m STAGGERSIZE] [-t THREADS] [-a] [-R]\n\n", argv[0]);
+    printf("Usage: %s -k KEY [ -x CORE ] [-d DIRECTORY] [-s STARTNONCE] [-n NONCES] [-m STAGGERSIZE] [-t THREADS] [-b MAXMEMORY] [-f FREESPACE] [-a] [-R]\n\n", argv[0]);
     printf("   see README.md\n");
     exit(-1);
 }
@@ -503,26 +491,34 @@ int main(int argc, char **argv) {
         }
     }
 
-    if (selecttype == 1)      {
+    // Autodetect threads
+    if (threads == 0)
+        threads = getNumberOfCores();
+
+    if (selecttype == 1) {
+        noncearguments = 4;
         printf("Using SSE4 core.\n");
     }
     else if (selecttype == 2) {
+        noncearguments = 8;
         printf("Using AVX2 core.\n");
-        if (nonces % (threads * 8)) {
-            printf("Number of nonces not divisible by threads * 8\n");
-            exit(-1);
-        }
     }
-    else {                    printf("Using ORIG core.\n");
+    else {
+        noncearguments = 1;
+        printf("Using ORIG core.\n");
         selecttype = 0;
+    }
+    if (noncearguments > 1 && nonces % (threads * noncearguments)) {
+        if (staggersize > 0) {
+            printf("Number of nonces not divisible by threads * %d\n", noncearguments);
+            exit(-1);
+        } else {
+            printf("Number of nonces not divisible by threads * %d, and will be adjusted when calculating stagger size\n", noncearguments);
+        }
     }
 
     if (addr == 0)
         usage(argv);
-
-    // Autodetect threads
-    if (threads == 0)
-        threads = getNumberOfCores();
 
     // No startnonce given: Just pick random one
     if (startgiven == 0) {
@@ -534,7 +530,7 @@ int main(int argc, char **argv) {
     // No nonces given: use whole disk
     if (nonces == 0) {
         uint64_t fs = freespace(outputdir);
-        if (fs <= leavespace) {
+        if ((fs <= leavespace) || ((fs - leavespace) / NONCE_SIZE < 1)) {
             printf("Not enough free space on device\n");
             exit(-1);
         }
@@ -550,8 +546,8 @@ int main(int argc, char **argv) {
         if (asyncmode) {
             usememory = (uint64_t)usememory / 2;
         }
-
         uint64_t memstag = usememory / NONCE_SIZE;
+
         if (nonces < memstag) {
             // Small stack: all at once
             staggersize = nonces;
@@ -560,8 +556,14 @@ int main(int argc, char **argv) {
             // Determine stagger that (almost) fits nonces
             for (i = memstag; i >= 1000; i--) {
                 if ((nonces % i) < 1000) {
+                    i = i - (i % (threads * noncearguments)); // Optimize stagger sizes for nonces processed per function call
                     staggersize = i;
-                    nonces-= (nonces % i);
+                    printf("Stagger size was set to %u, based on available memory and selected hashing algorithm.\n", staggersize);
+                    if ((nonces % i) > 0) {
+                        printf("Adjusting nonces from %u to %u to comply with stagger size.\n",
+                                nonces, (nonces - (nonces % i)));
+                        nonces -= (nonces % i);
+                    }
                     i = 0;
                 }
             }
@@ -575,8 +577,8 @@ int main(int argc, char **argv) {
         printf("Adjusting total nonces to %u to match stagger size\n", nonces);
     }
 
-    printf("Creating plots for nonces %" PRIu64 " to %" PRIu64 " (%u GB) using %u MB memory and %u threads\n",
-           startnonce, (startnonce + nonces), (uint32_t)(nonces / 4 / 953), (uint32_t)(staggersize / 4 * (1 + asyncmode)), threads);
+    printf("Creating plots for %u nonces (%" PRIu64 " to %" PRIu64 ", %u GB) with stagger size %u, using %u MB memory and %u threads\n",
+           nonces, startnonce, (startnonce + nonces), (uint32_t)(nonces / 4 / 954), staggersize, (uint32_t)(staggersize / 4 * (1 + asyncmode)), threads);
 
     // Comment this out/change it if you really want more than 128 Threads
     if (threads > 128) {
