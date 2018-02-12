@@ -279,7 +279,7 @@ work_i(void *x_void_ptr) {
                     (uint64_t)(i - startnonce + n + 2),
                     (uint64_t)(i - startnonce + n + 3));
         }
-        if (selecttype == 2) { // AVX2
+        else if (selecttype == 2) { // AVX2
             m256nonce(addr,
                     (i + n + 0), (i + n + 1), (i + n + 2), (i + n + 3),
                     (i + n + 4), (i + n + 5), (i + n + 6), (i + n + 7),
