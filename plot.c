@@ -46,7 +46,8 @@ uint32_t selecttype  = 0;
 uint32_t asyncmode   = 0;
 double createtime    = 0.0;
 uint64_t maxmemory   = 0;
-uint64_t leavespace  = (uint64_t)5*1024*1024*1024;
+uint64_t leavespace  = 0;
+uint64_t plotfilesize;
 uint64_t starttime;
 uint64_t run, lastrun, thisrun;
 int ofd;
@@ -306,7 +307,7 @@ getMS() {
 /* {{{ usage */
 
 void usage(char **argv) {
-    printf("Usage: %s -k KEY [ -x CORE ] [-d DIRECTORY] [-s STARTNONCE] [-n NONCES] [-m STAGGERSIZE] [-t THREADS] [-b MAXMEMORY] [-f FREESPACE] [-a] [-R]\n\n", argv[0]);
+    printf("Usage: %s -k KEY [ -x CORE ] [-d DIRECTORY] [-s STARTNONCE] [-n NONCES] [-m STAGGERSIZE] [-t THREADS] [-b MAXMEMORY] [-p PLOTFILESIZE] [-a] [-R]\n\n", argv[0]);
     printf("   see README.md\n");
     exit(-1);
 }
@@ -472,6 +473,9 @@ int main(int argc, char **argv) {
             case 'f':
                 leavespace = parsed;
                 break;
+            case 'p':
+                plotfilesize = parsed;
+                break;
             case 'x':
                 selecttype = parsed;
                 break;
@@ -527,13 +531,28 @@ int main(int argc, char **argv) {
         srand(time(NULL));
         startnonce = (uint64_t)rand() * (1 << 30) + rand();
     }
+    if (nonces > 0 && plotfilesize > 0) {
+        printf("Both number of nonces and size of plot file is specified. Choose one, and the other will be calculated automatically.\n");
+        return(1);
+    }
 
-    // No nonces given: use whole disk
+    // No nonces specified. Calculate nonces based on disk space
     if (nonces == 0) {
         uint64_t fs = freespace(outputdir);
-        uint64_t usespace = fs - leavespace;
-        if ((fs <= leavespace) || ((usespace / NONCE_SIZE) < 1)) {
-            printf("Not enough free space on device\n");
+        if (leavespace == 0 && plotfilesize == 0) {
+            // Neither plot file size nor remaining disk space is specified.
+            // Leave maximum 1GB if available, or 50% of the remaining diskspace otherwise.
+            leavespace = (fs > 1024*1024*1024) ? 1024 * 1024 * 1024 : fs * 0.5;
+        }
+        uint64_t usespace = (plotfilesize > 0) ? plotfilesize : fs - leavespace;
+        if (plotfilesize > 0  && leavespace > 0 && (plotfilesize + leavespace > fs)) {
+            printf("Plot file size is set to %0.2f GB and we should leave %0.2f GB of free space, but the disk only has %0.2f GB available.\n",
+                    (double)plotfilesize / 1024 / 1024 / 1024, (double)leavespace / 1024 / 1024 / 1024, (double)fs / 1024 / 1024 / 1024);
+            exit(1);
+        }
+        if ((fs <= usespace) || ((usespace / NONCE_SIZE) < 1)) {
+            printf("Not enough free space on device. Disk has %0.2f GB available, and we're configured to use %0.2f GB, leaving %0.2f GB.\n",
+                    (double)fs / 1024 / 1024 / 1024, (double)usespace / 1024 / 1024 / 1024, (double)leavespace / 1024 / 1024 / 1024);
             exit(-1);
         }
         nonces = (uint64_t)(usespace / NONCE_SIZE);
