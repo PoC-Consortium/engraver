@@ -50,6 +50,7 @@ uint64_t leavespace  = 0;
 uint64_t plotfilesize;
 uint64_t starttime;
 uint64_t run, lastrun, thisrun;
+int userleavespace;
 int lastspeed, lasthours, lastminutes, lastseconds;
 int ofd;
 
@@ -475,6 +476,7 @@ int main(int argc, char **argv) {
                 maxmemory = parsed;
                 break;
             case 'f':
+                userleavespace = 1;
                 leavespace = parsed;
                 break;
             case 'p':
@@ -543,7 +545,7 @@ int main(int argc, char **argv) {
     // No nonces specified. Calculate nonces based on disk space
     if (nonces == 0) {
         uint64_t fs = freespace(outputdir);
-        if (leavespace == 0 && plotfilesize == 0) {
+        if (plotfilesize == 0 && (leavespace == 0 && userleavespace != 1)) {
             // Neither plot file size nor remaining disk space is specified.
             // Leave maximum 1GB if available, or 50% of the remaining diskspace otherwise.
             leavespace = (fs > 1024*1024*1024) ? 1024 * 1024 * 1024 : fs * 0.5;
@@ -554,7 +556,7 @@ int main(int argc, char **argv) {
                     (double)plotfilesize / 1024 / 1024 / 1024, (double)leavespace / 1024 / 1024 / 1024, (double)fs / 1024 / 1024 / 1024);
             exit(1);
         }
-        if ((fs <= usespace) || ((usespace / NONCE_SIZE) < 1)) {
+        if ((fs < usespace) || ((usespace / NONCE_SIZE) < 1)) {
             printf("Not enough free space on device. Disk has %0.2f GB available, and we're configured to use %0.2f GB, leaving %0.2f GB.\n",
                     (double)fs / 1024 / 1024 / 1024, (double)usespace / 1024 / 1024 / 1024, (double)leavespace / 1024 / 1024 / 1024);
             exit(-1);
