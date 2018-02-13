@@ -513,12 +513,13 @@ int main(int argc, char **argv) {
             printf("Stagger size is predefined, but number of nonces is not divisible by threads * %d. Unable to use selected hashing core.\n", noncearguments);
             exit(-1);
         } else {
-            printf("Number of nonces is not divisible by threads * %d, and will be adjusted when calculating stagger size\n", noncearguments);
+            printf("Number of nonces is not divisible by threads * %d, and will be adjusted when calculating stagger size.\n", noncearguments);
         }
     }
 
-    if (addr == 0)
+    if (addr == 0) {
         usage(argv);
+    }
 
     // No startnonce given: Just pick random one
     if (startgiven == 0) {
@@ -536,8 +537,11 @@ int main(int argc, char **argv) {
             exit(-1);
         }
         nonces = (uint64_t)(usespace / NONCE_SIZE);
+        if (noncearguments > 1 && nonces % (threads * noncearguments)) {
+            nonces -= nonces % (threads * noncearguments);
+        }
         printf("Number of nonces not specified. Attempting to create %d nonces (%0.2f GB), leaving %0.2f GB remaining free space.\n",
-                nonces, ((double)nonces * NONCE_SIZE / 1024 / 1024 / 1024), ((double)leavespace / 1024 / 1024 / 1024));
+                nonces, ((double)nonces * NONCE_SIZE / 1024 / 1024 / 1024), ((double)(fs - usespace) / 1024 / 1024 / 1024));
     }
 
     // Autodetect stagger size
@@ -553,7 +557,7 @@ int main(int argc, char **argv) {
         }
 
         uint64_t memstag = usememory / NONCE_SIZE;
-        int staggercheck = (memstag > 1000) ? 1000 : 1;
+        int staggerdiff = (memstag > 1000) ? 1000 : 1;
         if (nonces < memstag) {
             // Small stack: all at once
             if (noncearguments > 1 && nonces % (threads * noncearguments)) {
@@ -567,9 +571,17 @@ int main(int argc, char **argv) {
         }
         else {
             // Determine stagger that (almost) fits nonces
-            for (i = memstag; i >= staggercheck; i--) {
-                if ((nonces % i) < staggercheck) {
-                    i = i - (i % (threads * noncearguments)); // Optimize stagger sizes for nonces processed per function call
+            for (i = memstag; i >= staggerdiff; i--) {
+                if (i - (i % (threads * noncearguments)) <=  0) {
+                    printf("Unable to find suitable stagger size for selected hashing core based on %d nonces and %d thread(s). Could indicate lack of memory (%0.2f GB).\n",
+                            nonces, threads, (double)usememory / 1024 / 1024 / 1024);
+                    return(1);
+                }
+                if (nonces % (i - (i % (threads * noncearguments))) <= staggerdiff) {
+                    if (selecttype > 0) {
+                        // Optimize stagger sizes for nonces processed per hashing core
+                        i = i - (i % (threads * noncearguments));
+                    }
                     staggersize = i;
                     printf("Stagger size was set to %u, based on available memory and selected hashing algorithm.\n", staggersize);
                     if ((nonces % staggersize) > 0) {
@@ -594,8 +606,8 @@ int main(int argc, char **argv) {
         printf("Adjusting total nonces to %u to match stagger size\n", nonces);
     }
 
-    printf("Creating plots for %u nonces (%" PRIu64 " to %" PRIu64 ", %0.2f GB) with stagger size %u, using %u MB memory and %u threads\n",
-           nonces, startnonce, (startnonce + nonces), ((double)nonces / 4 / 954), staggersize, (uint32_t)(staggersize / 4 * (1 + asyncmode)), threads);
+    printf("Creating plots for %u nonces (%" PRIu64 " to %" PRIu64 ", %0.2f GB) with stagger size %u, using %0.2f MB memory and %u threads\n",
+           nonces, startnonce, (startnonce + nonces), ((double)nonces * NONCE_SIZE / 1024 / 1024 / 1024), staggersize, ((double)staggersize / 4 * (1 + asyncmode)), threads);
 
     // Comment this out/change it if you really want more than 128 Threads
     if (threads > 128) {
