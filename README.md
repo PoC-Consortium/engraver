@@ -19,6 +19,7 @@ the code base until the result was what you see here.
     Niksa Franceschi <niksa.franceschi@gmail.com> (BURST-RQW7-3HNW-627D-3GAEV)
     a.k.a Mirkic7 <mirkic7@hotmail.com>
     Peter Kristolaitis <alter3d@alter3d.ca>       (BURST-WQ52-PUBY-N9WB-6J3DY)
+    Brynjar Eide <brynjar@segfault.no>            (BURST-5WLT-TP7V-6B7S-CZRQP)
 
 and finally
 
@@ -98,7 +99,7 @@ rico666 <bots@cryptoguru.org>                 (Don't donate)
 
 ###### Notes
 
-Calling the programm with wrong or incomplete command line, will print a rudimentary
+Calling the program with wrong or incomplete command line, will print a rudimentary
 usage information.
 
 The file name will have a '.plotting' suffix while the file is incomplete, and then

@@ -50,6 +50,7 @@ uint64_t leavespace  = 0;
 uint64_t plotfilesize;
 uint64_t starttime;
 uint64_t run, lastrun, thisrun;
+int lastspeed, lasthours, lastminutes, lastseconds;
 int ofd;
 
 char *cache, *wcache, *acache[2];
@@ -319,18 +320,18 @@ void *
 writecache(void *arguments) {
     uint64_t cacheblocksize = staggersize * SCOOP_SIZE;
     uint64_t thisnonce;
-    int percent;
+    float percent;
 
-    percent = (int)(100 * lastrun / nonces);
+    percent = ((double)100 * lastrun / nonces);
 
-    if (asyncmode == 1) {
-        printf("\33[2K\r%i percent done. (ASYNC write)", percent);
-        fflush(stdout);
+    if (lastseconds) {
+        printf("\33[2K\r%5.2f%% done. %i nonces/second, %02i:%02i:%02i left [writing%s]",
+                percent, lastspeed, lasthours, lastminutes, lastseconds, (asyncmode) ? " asynchronously" : "");
+    } else {
+        printf("\33[2K\r%5.2f%% done. [writing%s]",
+                percent, (asyncmode) ? " asynchronously" : "");
     }
-    else {
-        printf("\33[2K\r%i percent done. (write)", percent);
-        fflush(stdout);
-    }
+    fflush(stdout);
 
     for (thisnonce = 0; thisnonce < NUM_SCOOPS; thisnonce++ ) {
         uint64_t cacheposition = thisnonce * cacheblocksize;
@@ -347,14 +348,17 @@ writecache(void *arguments) {
 
     uint64_t ms = getMS() - starttime;
 
-    percent = (int)(100 * lastrun / nonces);
-    double minutes = (double)ms / (1000000 * 60);
-    int    speed   = (int)(staggersize / minutes);
-    int    m       = (int)(nonces - run) / speed;
-    int    h       = (int)(m / 60);
-    m -= h * 60;
+    percent        = ((double)100 * lastrun / nonces);
+    double runsecs = (double)ms / 1000000;
+    lastspeed      = (int)(staggersize / runsecs);
 
-    printf("\33[2K\r%i percent done. %i nonces/minute, %i:%02i left", percent, speed, h, m);
+    int seconds    = (int)(nonces - run) / lastspeed;
+    int remainder  = seconds % 3600;
+    lasthours      = (int)seconds / 3600;
+    lastminutes    = remainder / 60;;
+    lastseconds    = remainder % 60;
+
+    printf("\33[2K\r%5.2f%% done. %i nonces/second, %02i:%02i:%02i left", percent, lastspeed, lasthours, lastminutes, lastseconds);
     fflush(stdout);
 
     return NULL;
