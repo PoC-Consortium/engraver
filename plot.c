@@ -326,8 +326,8 @@ writecache(void *arguments) {
     percent = ((double)100 * lastrun / nonces);
 
     if (lastseconds) {
-        printf("\33[2K\r%5.2f%% done. %i nonces/second, %02i:%02i:%02i left [writing%s]",
-                percent, lastspeed, lasthours, lastminutes, lastseconds, (asyncmode) ? " asynchronously" : "");
+        printf("\33[2K\r%5.2f%% done. %i nonces per minute, %02i:%02i:%02i left [writing%s]",
+                percent, (lastspeed * 60), lasthours, lastminutes, lastseconds, (asyncmode) ? " asynchronously" : "");
     } else {
         printf("\33[2K\r%5.2f%% done. [writing%s]",
                 percent, (asyncmode) ? " asynchronously" : "");
@@ -359,7 +359,7 @@ writecache(void *arguments) {
     lastminutes    = remainder / 60;;
     lastseconds    = remainder % 60;
 
-    printf("\33[2K\r%5.2f%% done. %i nonces/second, %02i:%02i:%02i left", percent, lastspeed, lasthours, lastminutes, lastseconds);
+    printf("\33[2K\r%5.2f%% done. %i nonces per minute, %02i:%02i:%02i left", percent, (lastspeed * 60), lasthours, lastminutes, lastseconds);
     fflush(stdout);
 
     return NULL;
