@@ -71,6 +71,9 @@ rico666 <bots@cryptoguru.org>                 (Don't donate)
     Depending on the number of physical cores of your CPU, and the core
     (see below) used, there will be an optimum. Probably the number of physical
     cores your CPU has.
+
+  -v
+    Verbose mode.
     
   -x <core>
     Define which SHABAL256 hashing core to use. Possible values are:
