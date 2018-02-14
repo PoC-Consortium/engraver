@@ -1,5 +1,10 @@
 language: c
 script: make && make test
-os:
-  - linux
-  - osx
+matrix:
+    include:
+        - os: linux
+          language: c
+          env: OSFLAGS=-std=c99
+        - os: osx
+          language: c
+          env: TOXENV=py32
