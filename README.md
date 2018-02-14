@@ -114,7 +114,7 @@ If you do not match these numbers, the plotter will refuse to work for SSE4 and 
 cores, the default core will work on any arbitrary number of nonces.
 
 
-For \<startnonce>, \<staggersize>, \<nonces>, \<maxmemory>, \<plotfilesizez> and
+For \<startnonce>, \<staggersize>, \<nonces>, \<maxmemory>, \<plotfilesize> and
 \<diskspace> you can either define just a number or add the T/t, G/g, M/m or K/k suffix.
 E.g. "-s 1234k"
 * K/k = 1024
