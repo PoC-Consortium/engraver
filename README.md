@@ -1,6 +1,8 @@
 #CG_OBUP
 =============
 
+[![Build Status](https://travis-ci.org/jake-b/cg_obup.svg?branch=master)](https://travis-ci.org/jake-b/cg_obup)
+
 This is the CryptoGuru Optimized BURSTcoin Plotter -
 a BURST coin plotter that generates optimized plot files
 without the need to run an optimizer after plotting.
@@ -19,6 +21,7 @@ the code base until the result was what you see here.
     Niksa Franceschi <niksa.franceschi@gmail.com> (BURST-RQW7-3HNW-627D-3GAEV)
     a.k.a Mirkic7 <mirkic7@hotmail.com>
     Peter Kristolaitis <alter3d@alter3d.ca>       (BURST-WQ52-PUBY-N9WB-6J3DY)
+    Jake-B (MacOS Build)                          (BURST-ZGEK-VQ86-M9FV-7SDWY)
 
 and finally
 
