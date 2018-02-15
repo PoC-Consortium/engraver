@@ -6,5 +6,4 @@ matrix:
           language: c
           env: OSFLAGS=-std=c99
         - os: osx
-          language: c
-          env: TOXENV=py32
+          language: c          
