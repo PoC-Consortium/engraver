@@ -130,6 +130,8 @@ Execute the following command on unmounted partitions.
 
 ```UUID=<UUID> <mount-point> ext4 defaults,x-gvfs-show,noatime,nodiratime,nobarrier 0 2```
 
+When mining it is recommended to add the option ```ro``` to avoid sudden damages of the file system.
+
 
 ### TODO:
 
