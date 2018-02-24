@@ -626,7 +626,7 @@ int main(int argc, char **argv) {
             printf("\n\nError while reading from file: %d\n\n", errno);
             exit(1);
         }
-        startnonce += run * staggersize;
+        startnonce += run;
         printf("Resuming at nonce %ld with staggersize %d...\n", startnonce, staggersize);
     }
     else {
