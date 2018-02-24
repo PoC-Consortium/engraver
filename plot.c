@@ -46,6 +46,7 @@ uint32_t threads     = 0;
 uint32_t noncesperthread;
 uint32_t selecttype  = 0;
 uint32_t asyncmode   = 0;
+uint32_t resumeid = 0xaffeaffe;
 double createtime    = 0.0;
 uint64_t starttime;
 uint64_t run, lastrun, thisrun;
@@ -378,16 +379,11 @@ writecache(void *arguments) {
 void
 writestatus(void) {
     // Write current status to the end of the file
-    if ( lseek64(ofd, -32, SEEK_END) < 0 ) {
+    if ( lseek64(ofd, -sizeof run, SEEK_END) < 0 ) {
         printf("\n\nError while lseek()ing in file: %d\n\n", errno);
         exit(1);
     }
-    // Write (uint64_t)run, (uint64_t)startnonce, (uint32_t)staggersize
     if ( write(ofd, &run, sizeof run) < 0 ) {
-        printf("\n\nError while writing to file: %d\n\n", errno);
-        exit(1);
-    }
-    if ( write(ofd, &startnonce, sizeof startnonce) < 0 ) {
         printf("\n\nError while writing to file: %d\n\n", errno);
         exit(1);
     }
@@ -613,24 +609,24 @@ int main(int argc, char **argv) {
     }
 
     if ( readconfig ) {
-        // Read config and initial status to the end of the file
-        if ( lseek64(ofd, -32, SEEK_END) < 0 ) {
+        uint32_t id;
+
+        // Read last status from the end of the file
+        if ( lseek64(ofd, -sizeof run - sizeof id, SEEK_END) < 0 ) {
             printf("\n\nError while lseek()ing in file: %d\n\n", errno);
             exit(1);
         }
-        // Read (uint64_t)run, (uint64_t)startnonce, (uint32_t)staggersize
-        if ( read(ofd, &run, sizeof run) < sizeof run ) {
+        if ( read(ofd, &id, sizeof id) < sizeof id ) {
             printf("\n\nError while reading from file: %d\n\n", errno);
             exit(1);
         }
-        if ( read(ofd, &startnonce, sizeof startnonce) < sizeof startnonce ) {
+        if (id != resumeid) {
+            printf("\n\nThis plot file does not support resuming!\n\n");
+        } else if ( read(ofd, &run, sizeof run) < sizeof run ) {
             printf("\n\nError while reading from file: %d\n\n", errno);
             exit(1);
         }
-        if ( read(ofd, &staggersize, sizeof staggersize) < sizeof staggersize ) {
-            printf("\n\nError while reading from file: %d\n\n", errno);
-            exit(1);
-        }
+        startnonce += run * staggersize;
         printf("Resuming at nonce %ld with staggersize %d...\n", startnonce, staggersize);
     }
     else {
@@ -644,12 +640,16 @@ int main(int argc, char **argv) {
         else {
             printf("Done pre-allocating space.\n");
         }
-
-        writestatus();
-        if ( write(ofd, &staggersize, sizeof staggersize) < 0 ) {
+        // Write resume id to the end of the file
+        if ( lseek64(ofd, -sizeof run - sizeof resumeid, SEEK_END) < 0 ) {
+            printf("\n\nError while lseek()ing in file: %d\n\n", errno);
+            exit(1);
+        }
+        if ( write(ofd, &resumeid, sizeof resumeid) < 0 ) {
             printf("\n\nError while writing to file: %d\n\n", errno);
             exit(1);
         }
+        writestatus();
     }
 
     // Threads:
@@ -671,7 +671,6 @@ int main(int argc, char **argv) {
     else wcache = cache;
 
     for (; run < nonces; run += staggersize) {
-        writestatus();
         astarttime = getMS();
 
         for (i = 0; i < threads; i++) {
@@ -716,6 +715,7 @@ int main(int argc, char **argv) {
             }
             pthread_join(writeworker, NULL);
         }
+        writestatus();
 
         startnonce += staggersize;
     }
