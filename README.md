@@ -21,6 +21,7 @@ the code base until the result was what you see here.
     Niksa Franceschi <niksa.franceschi@gmail.com> (BURST-RQW7-3HNW-627D-3GAEV)
     a.k.a Mirkic7 <mirkic7@hotmail.com>
     Peter Kristolaitis <alter3d@alter3d.ca>       (BURST-WQ52-PUBY-N9WB-6J3DY)
+    Brynjar Eide <brynjar@segfault.no>            (BURST-5WLT-TP7V-6B7S-CZRQP)
     Jake-B (MacOS Build)                          (BURST-ZGEK-VQ86-M9FV-7SDWY)
 
 and finally
@@ -40,7 +41,11 @@ rico666 <bots@cryptoguru.org>                 (Don't donate)
   -a
     Flag to use asynchronous writing mode. If this is set, the plotter can work
     even while data is being written to disk. It will give you more speed at the
-    cost of more memory usage (will use double the memory!). Dafult is OFF.
+    cost of more memory usage (will use double the memory!). Default is OFF.
+
+  -b <maxmemory>
+    Maximum amount of memory to use. Will automatically be halved when used in
+    combination with -a.
 
   -R
     Resume from last position in an existing plot file.
@@ -51,24 +56,32 @@ rico666 <bots@cryptoguru.org>                 (Don't donate)
     Which directory to use. You can give relative as well as absolute paths.
     If you omit this, plots are written into the 'plots' directory in the
     current path.
-    
+
+  -f <diskspace>
+    When -n is not specified, leave this much disk space while calculating number
+    of nonces to plot.
+
   -m <staggersize>
     In this version, you can think of this as the memory cache used by the program
     before a write to the disk is necessary. Obviously the more you give here, the
     less I/O is necessary. If not given, the program tries to use 80% of the free
     memory of the machine. Please be aware that in combination with the -a parameter
     the memory requirement is doubled!
-    
+
   -n <nonces|spacedef>
     The number of nonces to plot. Each nonce is 256KB in size. If you do not
     give the number of nonces, the program will try to plot the maximum number
     of nonces that are possible according to the free disk space where
     <directory> resides.
-    
+
+  -p <plotfilesize>
+    Attempt to create a plot file of this size. May not be combined with -n, since
+    the amount of nonces will be calculated from the file size.
+
   -s <startnonce>
     The offset from which to start plotting nonces. If not given, the program will
     simply choose an offset randomly.
-    
+
   -t <threads>
     Number of threads to use when plotting. There is no "more is better".
     Depending on the number of physical cores of your CPU, and the core
@@ -89,14 +102,14 @@ rico666 <bots@cryptoguru.org>                 (Don't donate)
     AVX2 being roughly 4x faster than default. See also "Notes" below!
 
  ```
- 
+
 ###### Notes
 
-Calling the programm with wrong or incomplete command line, will print a rudimentary
+Calling the program with wrong or incomplete command line, will print a rudimentary
 usage information.
 
 The file name will have a '.plotting' suffix while the file is incomplete, and then
-renamed to the standard format if plotting is successful. 
+renamed to the standard format if plotting is successful.
 
 AVX2/SSE4 usage: In order to achieve best performance, you must make sure that the
 number of nonces to plot will match the number of threads like this:
@@ -107,13 +120,15 @@ If you do not match these numbers, the plotter will refuse to work for SSE4 and 
 cores, the default core will work on any arbitrary number of nonces.
 
 
-For \<startnonce>, \<staggersize> and \<nonces> you can either define just a number or
-add the T/t, G/g, M/m or K/k suffix. E.g. "-s 1234k"
+For \<startnonce>, \<staggersize>, \<nonces>, \<maxmemory>, \<plotfilesize> and
+\<diskspace> you can either define just a number or add the T/t, G/g, M/m or K/k suffix.
+E.g. "-s 1234k"
 * K/k = 1024
 * M/m = 1024<sup>2</sup>
 * G/g = 1024<sup>3</sup>
 * T/t = 1024<sup>4</sup>
-in which case the definition is not the number of nonces, but the memory used.
+in which case the definitions for \<staggersize> and \<nonces> are not the number of
+nonces, but the memory used.
 
 ### Tuning tipps for ext4 users:
 

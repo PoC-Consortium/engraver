@@ -26,8 +26,6 @@
 #include "mshabal.h"
 #include "helper.h"
 
-// Leave 5GB free space
-#define FREE_SPACE      (uint64_t)5 * 1000 * 1000 * 1000
 #define DEFAULTDIR      "plots/"
 
 // Not to be changed below this
@@ -49,14 +47,19 @@ uint64_t startnonce  = 0;
 uint32_t nonces      = 0;
 uint32_t staggersize = 0;
 uint32_t threads     = 0;
-uint32_t noncesperthread;
+uint32_t noncesperthread, noncearguments;
 uint32_t selecttype  = 0;
 uint32_t asyncmode   = 0;
 uint32_t verbose     = 0;
 uint32_t resumeid    = 0xaffeaffe;
 double createtime    = 0.0;
+uint64_t maxmemory   = 0;
+uint64_t leavespace  = 0;
+uint64_t plotfilesize;
 uint64_t starttime;
 uint64_t run, lastrun, thisrun;
+int userleavespace;
+int lastspeed, lasthours, lastminutes, lastseconds;
 int ofd;
 
 char *cache, *wcache, *acache[2];
@@ -121,7 +124,7 @@ void nonce(uint64_t addr, uint64_t nonce, uint64_t cachepos) {
     char final[32];
     char gendata[16 + NONCE_SIZE];
     char *xv;
-        
+
     SET_NONCE(gendata, addr,  0);
     SET_NONCE(gendata, nonce, 8);
 
@@ -139,7 +142,7 @@ void nonce(uint64_t addr, uint64_t nonce, uint64_t cachepos) {
         shabal(&x, &gendata[i], len);
         shabal_close(&x, 0, 0, &gendata[i - HASH_SIZE]);
     }
-        
+
     shabal_init(&x, 256);
     shabal(&x, gendata, 16 + NONCE_SIZE);
     shabal_close(&x, 0, 0, final);
@@ -318,37 +321,25 @@ work_i(void *x_void_ptr) {
 
     uint32_t n;
 
-    if (selecttype == 2) { // AVX2
-        for (n = 0; n < noncesperthread; n += 8) {            
+    for (n = 0; n < noncesperthread; n += noncearguments) {
+        if (selecttype == 1) { // SSE4
+            mnonce(addr,
+                    (i + n), (i + n + 1), (i + n + 2), (i + n + 3),
+                    (uint64_t)(i - startnonce + n),
+                    (uint64_t)(i - startnonce + n + 1),
+                    (uint64_t)(i - startnonce + n + 2),
+                    (uint64_t)(i - startnonce + n + 3));
+        }
+        else if (selecttype == 2) { // AVX2
             m256nonce(addr,
-                      (i + n + 0), (i + n + 1), (i + n + 2), (i + n + 3),
-                      (i + n + 4), (i + n + 5), (i + n + 6), (i + n + 7),
-                      (i - startnonce + n));
+                    (i + n + 0), (i + n + 1), (i + n + 2), (i + n + 3),
+                    (i + n + 4), (i + n + 5), (i + n + 6), (i + n + 7),
+                    (i - startnonce + n));
+        }
+        else { // STANDARD
+            nonce(addr, (i + n), (uint64_t)(i - startnonce + n));
         }
     }
-    else {
-        for (n = 0; n < noncesperthread; n++) {
-            if (selecttype == 1) { // SSE4
-                if (n + 4 <= noncesperthread) {
-                    mnonce(addr,
-                           (i + n), (i + n + 1), (i + n + 2), (i + n + 3),
-                           (uint64_t)(i - startnonce + n),
-                           (uint64_t)(i - startnonce + n + 1),
-                           (uint64_t)(i - startnonce + n + 2),
-                           (uint64_t)(i - startnonce + n + 3));
-                    n += 3;
-                }
-                else {
-                    printf("SSE4 inefficiency\n");
-                    nonce(addr,(i + n), (uint64_t)(i - startnonce + n));
-                }
-            }
-            else { // STANDARD
-                nonce(addr, (i + n), (uint64_t)(i - startnonce + n));
-            }
-        }
-    }
-
     return NULL;
 }
 
@@ -366,7 +357,7 @@ getMS() {
 /* {{{ usage */
 
 void usage(char **argv) {
-    printf("Usage: %s -k KEY [ -x CORE ] [-d DIRECTORY] [-s STARTNONCE] [-n NONCES] [-m STAGGERSIZE] [-t THREADS] [-a] [-R] [-v]\n\n", argv[0]);
+    printf("Usage: %s -k KEY [ -x CORE ] [-d DIRECTORY] [-s STARTNONCE] [-n NONCES] [-m STAGGERSIZE] [-t THREADS] [-b MAXMEMORY] [-p PLOTFILESIZE] [-a] [-R]\n\n", argv[0]);
     printf("   see README.md\n");
     exit(-1);
 }
@@ -378,18 +369,18 @@ void *
 writecache(void *arguments) {
     uint64_t cacheblocksize = staggersize * SCOOP_SIZE;
     uint64_t thisnonce;
-    int percent;
+    float percent;
 
-    percent = (int)(100 * lastrun / nonces);
+    percent = ((double)100 * lastrun / nonces);
 
-    if (asyncmode == 1) {
-        printf("\33[2K\r%i Percent done. (ASYNC write)", percent);
-        fflush(stdout);
+    if (lastseconds) {
+        printf("\33[2K\r%5.2f%% done. %i nonces per minute, %02i:%02i:%02i left [writing%s]",
+                percent, (lastspeed * 60), lasthours, lastminutes, lastseconds, (asyncmode) ? " asynchronously" : "");
+    } else {
+        printf("\33[2K\r%5.2f%% done. [writing%s]",
+                percent, (asyncmode) ? " asynchronously" : "");
     }
-    else {
-        printf("\33[2K\r%i Percent done. (write)", percent);
-        fflush(stdout);
-    }
+    fflush(stdout);
 
     for (thisnonce = 0; thisnonce < NUM_SCOOPS; thisnonce++ ) {
         uint64_t cacheposition = thisnonce * cacheblocksize;
@@ -405,15 +396,18 @@ writecache(void *arguments) {
     }
 
     uint64_t ms = getMS() - starttime;
-        
-    percent = (int)(100 * lastrun / nonces);
-    double minutes = (double)ms / (1000000 * 60);
-    int    speed   = (int)(staggersize / minutes);
-    int    m       = (int)(nonces - run) / speed;
-    int    h       = (int)(m / 60);
-    m -= h * 60;
 
-    printf("\33[2K\r%i Percent done. %i nonces/minute, %i:%02i left", percent, speed, h, m);
+    percent        = ((double)100 * lastrun / nonces);
+    double runsecs = (double)ms / 1000000;
+    lastspeed      = (int)(staggersize / runsecs);
+
+    int seconds    = (int)(nonces - run) / lastspeed;
+    int remainder  = seconds % 3600;
+    lasthours      = (int)seconds / 3600;
+    lastminutes    = remainder / 60;;
+    lastseconds    = remainder % 60;
+
+    printf("\33[2K\r%5.2f%% done. %i nonces per minute, %02i:%02i:%02i left", percent, (lastspeed * 60), lasthours, lastminutes, lastseconds);
     fflush(stdout);
 
     return NULL;
@@ -444,7 +438,7 @@ int main(int argc, char **argv) {
     if (argc < 2) {
         usage(argv);
     }
-    
+
     int i;
     int startgiven = 0;
     int resume = 0;
@@ -514,7 +508,7 @@ int main(int argc, char **argv) {
                 }
                 else {
                     nonces = parsed;
-                }       
+                }
                 break;
             case 'm':
                 if (modified == 1) {
@@ -522,10 +516,20 @@ int main(int argc, char **argv) {
                 }
                 else {
                     staggersize = parsed;
-                }       
+                }
                 break;
             case 't':
                 threads = parsed;
+                break;
+            case 'b':
+                maxmemory = parsed;
+                break;
+            case 'f':
+                userleavespace = 1;
+                leavespace = parsed;
+                break;
+            case 'p':
+                plotfilesize = parsed;
                 break;
             case 'x':
                 selecttype = parsed;
@@ -542,31 +546,39 @@ int main(int argc, char **argv) {
                 else {
                     outputdir[ds] = 0;
                 }
-                                        
-            }                       
+            }
         }
     }
-
-    if (selecttype == 1)      {
-        printf("Using SSE4 core.\n");
-    }
-    else if (selecttype == 2) {
-        printf("Using AVX2 core.\n");
-        if (nonces % (threads * 8)) {
-            printf("Number of nonces not divisible by threads * 8\n");
-            exit(-1);
-        }
-    }
-    else {                    printf("Using ORIG core.\n");
-        selecttype = 0;
-    }
-
-    if (addr == 0)
-        usage(argv);
 
     // Autodetect threads
     if (threads == 0)
         threads = getNumberOfCores();
+
+    if (selecttype == 1) {
+        noncearguments = 4;
+        printf("Using SSE4 core.\n");
+    }
+    else if (selecttype == 2) {
+        noncearguments = 8;
+        printf("Using AVX2 core.\n");
+    }
+    else {
+        noncearguments = 1;
+        printf("Using ORIG core.\n");
+        selecttype = 0;
+    }
+    if (noncearguments > 1 && nonces % (threads * noncearguments)) {
+        if (staggersize > 0) {
+            printf("Stagger size is predefined, but number of nonces is not divisible by threads * %d. Unable to use selected hashing core.\n", noncearguments);
+            exit(-1);
+        } else {
+            printf("Number of nonces is not divisible by threads * %d, and will be adjusted when calculating stagger size.\n", noncearguments);
+        }
+    }
+
+    if (addr == 0) {
+        usage(argv);
+    }
 
     // No startnonce given: Just pick random one
     if (startgiven == 0) {
@@ -574,37 +586,91 @@ int main(int argc, char **argv) {
         srand(time(NULL));
         startnonce = (uint64_t)rand() * (1 << 30) + rand();
     }
+    if (nonces > 0 && plotfilesize > 0) {
+        printf("Both number of nonces and size of plot file is specified. Choose one, and the other will be calculated automatically.\n");
+        return(1);
+    }
 
-    // No nonces given: use whole disk
+    // No nonces specified. Calculate nonces based on disk space
     if (nonces == 0) {
-      uint64_t fs = freespace(outputdir);
-        if (fs <= FREE_SPACE) {
-            printf("Not enough free space on device\n");
+        uint64_t fs = freespace(outputdir);
+        if (plotfilesize == 0 && (leavespace == 0 && userleavespace != 1)) {
+            // Neither plot file size nor remaining disk space is specified.
+            // Leave maximum 1GB if available, or 50% of the remaining diskspace otherwise.
+            leavespace = (fs > 1024*1024*1024) ? 1024 * 1024 * 1024 : fs * 0.5;
+        }
+        uint64_t usespace = (plotfilesize > 0) ? plotfilesize : fs - leavespace;
+        if (plotfilesize > 0  && leavespace > 0 && (plotfilesize + leavespace > fs)) {
+            printf("Plot file size is set to %0.2f GB and we should leave %0.2f GB of free space, but the disk only has %0.2f GB available.\n",
+                    (double)plotfilesize / 1024 / 1024 / 1024, (double)leavespace / 1024 / 1024 / 1024, (double)fs / 1024 / 1024 / 1024);
+            exit(1);
+        }
+        if ((fs < usespace) || ((usespace / NONCE_SIZE) < 1)) {
+            printf("Not enough free space on device. Disk has %0.2f GB available, and we're configured to use %0.2f GB, leaving %0.2f GB.\n",
+                    (double)fs / 1024 / 1024 / 1024, (double)usespace / 1024 / 1024 / 1024, (double)leavespace / 1024 / 1024 / 1024);
             exit(-1);
         }
-        fs -= FREE_SPACE;
-                                
-        nonces = (uint64_t)(fs / NONCE_SIZE);
+        nonces = (uint64_t)(usespace / NONCE_SIZE);
+        if (noncearguments > 1 && nonces % (threads * noncearguments)) {
+            nonces -= nonces % (threads * noncearguments);
+        }
+        printf("Number of nonces not specified. Attempting to create %d nonces (%0.2f GB), leaving %0.2f GB remaining free space.\n",
+                nonces, ((double)nonces * NONCE_SIZE / 1024 / 1024 / 1024), ((double)(fs - usespace) / 1024 / 1024 / 1024));
     }
 
     // Autodetect stagger size
     if (staggersize == 0) {
-      uint64_t memstag = (freemem() * 0.8) / NONCE_SIZE; // use 80% of memory
+        // Use max 80% (40% if async mode) of total available memory, unless the user has specified a limit
+        uint64_t usememory = (maxmemory > 0) ? maxmemory : freemem() * 0.8;
+        if (asyncmode) {
+            usememory = (uint64_t)usememory / 2;
+        }
+        if (usememory < NONCE_SIZE) {
+            printf("Unable to plot any nonces (%d bytes) with only %" PRIu64 " bytes of memory available.\n", NONCE_SIZE, usememory);
+            exit(1);
+        }
 
-
-        if (nonces < memstag) {         // Small stack: all at once
+        uint64_t memstag = usememory / NONCE_SIZE;
+        int staggerdiff = (memstag > 1000) ? 1000 : 1;
+        if (nonces < memstag) {
+            // Small stack: all at once
+            if (noncearguments > 1 && nonces % (threads * noncearguments)) {
+                printf("All nonces would fit in memory, but number of nonces is not divisible by threads * %d. Adjusting nonces from %d to %d.\n",
+                        noncearguments, nonces, (nonces - (nonces % (threads * noncearguments))));
+                nonces -= (nonces % (threads * noncearguments));
+            } else {
+                printf("All nonces will fit in memory. Setting stagger size to %d\n", nonces);
+            }
             staggersize = nonces;
         }
-        else {                          // Determine stagger that (almost) fits nonces
-            
-            for (i = memstag; i >= 1000; i--) {
-                if ((nonces % i) < 1000) {
+        else {
+            // Determine stagger that (almost) fits nonces
+            for (i = memstag; i >= staggerdiff; i--) {
+                if (i - (i % (threads * noncearguments)) <=  0) {
+                    printf("Unable to find suitable stagger size for selected hashing core based on %d nonces and %d thread(s). Could indicate lack of memory (%0.2f GB).\n",
+                            nonces, threads, (double)usememory / 1024 / 1024 / 1024);
+                    return(1);
+                }
+                if (nonces % (i - (i % (threads * noncearguments))) <= staggerdiff) {
+                    if (selecttype > 0) {
+                        // Optimize stagger sizes for nonces processed per hashing core
+                        i = i - (i % (threads * noncearguments));
+                    }
                     staggersize = i;
-                    nonces-= (nonces % i);
+                    printf("Stagger size was set to %u, based on available memory and selected hashing algorithm.\n", staggersize);
+                    if ((nonces % staggersize) > 0) {
+                        printf("Adjusting nonces from %u to %u to comply with stagger size.\n",
+                                nonces, (nonces - (nonces % i)));
+                        nonces -= (nonces % i);
+                    }
                     i = 0;
                 }
             }
         }
+    }
+    if (nonces == 0 || staggersize == 0) {
+        printf("Ended up with %d nonces and a stagger size of %d. Unable to proceed.", nonces, staggersize);
+        return(1);
     }
 
     // Adjust according to stagger size
@@ -614,8 +680,8 @@ int main(int argc, char **argv) {
         printf("Adjusting total nonces to %u to match stagger size\n", nonces);
     }
 
-    printf("Creating plots for nonces %" PRIu64 " to %" PRIu64 " (%u GB) using %u MB memory and %u threads\n",
-           startnonce, (startnonce + nonces), (uint32_t)(nonces / 4 / 953), (uint32_t)(staggersize / 4 * (1 + asyncmode)), threads);
+    printf("Creating plots for %u nonces (%" PRIu64 " to %" PRIu64 ", %0.2f GB) with stagger size %u, using %0.2f MB memory and %u threads\n",
+           nonces, startnonce, (startnonce + nonces), ((double)nonces * NONCE_SIZE / 1024 / 1024 / 1024), staggersize, ((double)staggersize / 4 * (1 + asyncmode)), threads);
 
     // Comment this out/change it if you really want more than 128 Threads
     if (threads > 128) {
@@ -693,7 +759,7 @@ int main(int argc, char **argv) {
         printf("Pre-allocating space for file (%ld bytes)...\n", filesize);
         if ( posix_fallocate(ofd, 0, filesize) != 0 ) {
             printf("File pre-allocation failed.\n");
-            return 1;       
+            return 1;
         }
         else {
             printf("Done pre-allocating space.\n");
@@ -791,17 +857,17 @@ int main(int argc, char **argv) {
             lastrun = run + staggersize;
             wcache = cache;
             if (pthread_create(&writeworker, NULL, writecache, (void *)NULL)) {
-                printf("Error creating thread. Out of memory? Try lower stagger size / less threads / remove async mode\n");
+                printf("Error creating thread. Out of memory? Try lower stagger size / fewer threads / remove async mode\n");
                 exit(-1);
-            }       
-            asyncbuf = 1 - asyncbuf;                    
+            }
+            asyncbuf = 1 - asyncbuf;
             cache = acache[asyncbuf];
         }
         else {
             thisrun = run;
             lastrun = run + staggersize;
             if (pthread_create(&writeworker, NULL, writecache, (void *)NULL)) {
-                printf("Error creating thread. Out of memory? Try lower stagger size / less threads\n");
+                printf("Error creating thread. Out of memory? Try lower stagger size / fewer threads\n");
                 exit(-1);
             }
             pthread_join(writeworker, NULL);
@@ -810,7 +876,7 @@ int main(int argc, char **argv) {
 
         startnonce += staggersize;
     }
-        
+
     if (asyncmode == 1) pthread_join(writeworker, NULL);
 
     close(ofd);
