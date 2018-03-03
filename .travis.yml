@@ -1,0 +1,9 @@
+language: c
+script: make && make test
+matrix:
+    include:
+        - os: linux
+          language: c
+          env: OSFLAGS=-std=c99
+        - os: osx
+          language: c          

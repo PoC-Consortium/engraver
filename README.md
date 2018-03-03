@@ -1,6 +1,8 @@
 #CG_OBUP
 =============
 
+[![Build Status](https://travis-ci.org/jake-b/cg_obup.svg?branch=master)](https://travis-ci.org/jake-b/cg_obup)
+
 This is the CryptoGuru Optimized BURSTcoin Plotter -
 a BURST coin plotter that generates optimized plot files
 without the need to run an optimizer after plotting.
@@ -20,6 +22,7 @@ the code base until the result was what you see here.
     a.k.a Mirkic7 <mirkic7@hotmail.com>
     Peter Kristolaitis <alter3d@alter3d.ca>       (BURST-WQ52-PUBY-N9WB-6J3DY)
     Brynjar Eide <brynjar@segfault.no>            (BURST-5WLT-TP7V-6B7S-CZRQP)
+    Jake-B (MacOS Build)                          (BURST-ZGEK-VQ86-M9FV-7SDWY)
 
 and finally
 
@@ -85,6 +88,9 @@ rico666 <bots@cryptoguru.org>                 (Don't donate)
     (see below) used, there will be an optimum. Probably the number of physical
     cores your CPU has.
 
+  -v
+    Verbose mode.
+    
   -x <core>
     Define which SHABAL256 hashing core to use. Possible values are:
       0 - default core (*)
@@ -123,6 +129,30 @@ E.g. "-s 1234k"
 * T/t = 1024<sup>4</sup>
 in which case the definitions for \<staggersize> and \<nonces> are not the number of
 nonces, but the memory used.
+
+### Tuning tipps for ext4 users:
+
+If your drive only contains plot files then following tuning options are recommended.
+Execute the following command on unmounted partitions.
+
+1. Disable journal. Improves plot performance and is not needed when mining:
+
+```tune2fs -O ^has_journal /dev/sdX```
+
+2. Disable reserved blocks for root (gives you 5% more disk space):
+
+```tune2fs -m 0 /dev/sdX```
+
+3. To be sure the file system is clean:
+
+```fsck /dev/sdX```
+
+4. Adjust mount options for further tuning:
+
+```UUID=<UUID> <mount-point> ext4 defaults,x-gvfs-show,noatime,nodiratime,nobarrier 0 2```
+
+When mining it is recommended to add the option ```ro``` to avoid sudden damages of the file system.
+
 
 ### TODO:
 
