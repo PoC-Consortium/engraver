@@ -9,7 +9,7 @@ without the need to run an optimizer after plotting.
 
 It is intended to work on any UNIX system with a sufficiently sane
 filesystem (able to pre-allocate space), but for now only Linux
-has been tested. 64bit only!
+and MacOS has been tested. 64bit only!
 
 dcct -> mdcct -> omdcct -> cg_obup
 
@@ -104,6 +104,11 @@ rico666 <bots@cryptoguru.org>                 (Don't donate)
  ```
 
 ###### Notes
+
+A word of warning for SMR drives: Plotting on these will seem
+unbearable. You have been warned. Plot on PMR drives instead, then
+copy the plot file to a SMR drive. If you do not know the difference
+between SMR and PMR, don't plot until you do.
 
 Calling the program with wrong or incomplete command line, will print a rudimentary
 usage information.

@@ -804,7 +804,7 @@ int main(int argc, char **argv) {
     }
     
     if (verbose) {
-        printf("Current stack size is: %d\n", stackSize);
+        printf("Current stack size is: %ld\n", stackSize);
     }
 
     /* If the default size does not fit our needs, set the attribute with our required value */
