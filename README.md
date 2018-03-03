@@ -109,6 +109,30 @@ add the T/t, G/g, M/m or K/k suffix. E.g. "-s 1234k"
 * T/t = 1024<sup>4</sup>
 in which case the definition is not the number of nonces, but the memory used.
 
+### Tuning tipps for ext4 users:
+
+If your drive only contains plot files then following tuning options are recommended.
+Execute the following command on unmounted partitions.
+
+1. Disable journal. Improves plot performance and is not needed when mining:
+
+```tune2fs -O ^has_journal /dev/sdX```
+
+2. Disable reserved blocks for root (gives you 5% more disk space):
+
+```tune2fs -m 0 /dev/sdX```
+
+3. To be sure the file system is clean:
+
+```fsck /dev/sdX```
+
+4. Adjust mount options for further tuning:
+
+```UUID=<UUID> <mount-point> ext4 defaults,x-gvfs-show,noatime,nodiratime,nobarrier 0 2```
+
+When mining it is recommended to add the option ```ro``` to avoid sudden damages of the file system.
+
+
 ### TODO:
 
 * thorough test suite
