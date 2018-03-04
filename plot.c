@@ -709,8 +709,8 @@ int main(int argc, char **argv) {
 
     mkdir(outputdir, S_IRUSR | S_IWUSR | S_IXUSR | S_IRGRP | S_IROTH);
 
-    char name[100];
-    char finalname[100];
+    char name[200];
+    char finalname[200];
     sprintf(name, "%s%"PRIu64"_%"PRIu64"_%u_%u.plotting", outputdir, addr, startnonce, nonces, nonces);
     sprintf(finalname, "%s%"PRIu64"_%"PRIu64"_%u_%u", outputdir, addr, startnonce, nonces, nonces);
 
