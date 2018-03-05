@@ -30,7 +30,7 @@ rico666 <bots@cryptoguru.org>                 (Don't donate)
 
 
 ### Installing
-    git clone https://github.com/rico666/cg_obup
+    git clone https://github.com/PoC-Consortium/cg_obup
     cd cg_obup
     make
 
