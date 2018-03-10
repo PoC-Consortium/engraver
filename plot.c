@@ -339,6 +339,12 @@ work_i(void *x_void_ptr) {
         else { // STANDARD
             nonce(addr, (i + n), (uint64_t)(i - startnonce + n));
         }
+
+    	if (0 == i && verbose == 1){
+            printf("%u nonces done from %u nonces\r",n*threads,noncesperthread*threads);
+            fflush(stdout);
+        }
+
     }
     return NULL;
 }
@@ -357,7 +363,7 @@ getMS() {
 /* {{{ usage */
 
 void usage(char **argv) {
-    printf("Usage: %s -k KEY [ -x CORE ] [-d DIRECTORY] [-s STARTNONCE] [-n NONCES] [-m STAGGERSIZE] [-t THREADS] [-b MAXMEMORY] [-p PLOTFILESIZE] [-a] [-R]\n\n", argv[0]);
+    printf("Usage: %s -k KEY [ -x CORE ] [-v VERBOSE] [-d DIRECTORY] [-s STARTNONCE] [-n NONCES] [-m STAGGERSIZE] [-t THREADS] [-b MAXMEMORY] [-p PLOTFILESIZE] [-a] [-R]\n\n", argv[0]);
     printf("   see README.md\n");
     exit(-1);
 }
@@ -374,7 +380,7 @@ writecache(void *arguments) {
     percent = ((double)100 * lastrun / nonces);
 
     if (lastseconds) {
-        printf("\33[2K\r%5.2f%% done. %i nonces per minute, %02i:%02i:%02i left [writing%s]",
+        printf("\r\n\33[2K\r%5.2f%% done. %i nonces per minute, %02i:%02i:%02i left [writing%s]",
                 percent, (lastspeed * 60), lasthours, lastminutes, lastseconds, (asyncmode) ? " asynchronously" : "");
     } else {
         printf("\33[2K\r%5.2f%% done. [writing%s]",
@@ -407,7 +413,7 @@ writecache(void *arguments) {
     lastminutes    = remainder / 60;;
     lastseconds    = remainder % 60;
 
-    printf("\33[2K\r%5.2f%% done. %i nonces per minute, %02i:%02i:%02i left", percent, (lastspeed * 60), lasthours, lastminutes, lastseconds);
+    printf("\r\n\33[2K\r%5.2f%% done. %i nonces per minute, %02i:%02i:%02i left", percent, (lastspeed * 60), lasthours, lastminutes, lastseconds);
     fflush(stdout);
 
     return NULL;
