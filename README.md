@@ -111,8 +111,14 @@ in which case the definition is not the number of nonces, but the memory used.
 
 ### Tuning tipps for ext4 users:
 
-If your drive only contains plot files then following tuning options are recommended.
-Execute the following command on unmounted partitions.
+If your drive only contains plot files then following tuning options recommended to get the maximum
+space and performance.
+
+If you create a new file system:
+
+```mkfs.ext4 -O sparse_super,large_file,^has_journal -m 0 -T huge -E lazy_itable_init -m 0 /dev/sdX```
+
+For an existing file system (execute the following command on unmounted partitions):
 
 1. Disable journal. Improves plot performance and is not needed when mining:
 
