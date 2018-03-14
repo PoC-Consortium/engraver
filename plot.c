@@ -317,7 +317,6 @@ m256nonce(uint64_t addr,
 
 void *
 work_i(void *x_void_ptr) {
-
 	uint64_t i = *(uint64_t *)x_void_ptr;
     uint32_t n;
 
@@ -340,20 +339,18 @@ work_i(void *x_void_ptr) {
             nonce(addr, (i + n), (uint64_t)(i - startnonce + n));
         }
 
-        /*
-         * Print out the actual nonce plot state if -v mode is active
-         */
-    	if (verbose == 1)
-    	{
-           static unsigned int oldn = 1;
+        // If verbose mode is set print out actual nonce plot state
+		if (verbose == 1) {
+			static unsigned int oldn = 1;
 
-           if(oldn != n)
-           {
-             oldn=n;
-             printf("Nonces %lu from %u nonces %2.2f %% done...\r\n",((uint64_t)(n*threads))+run,nonces,((float)((n*threads)+run)/(float)nonces)*100);
-             fflush(stdout);
-           }
-         }
+			if (oldn != n) {
+				oldn = n;
+				printf("Nonces %lu from %u nonces %2.2f %% done...\r\n",
+						((uint64_t)(n * threads)) + run, nonces,
+						((float) ((n * threads) + run) / (float) nonces) * 100);
+				fflush(stdout);
+			}
+		}
 
     }
     return NULL;
