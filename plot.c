@@ -317,8 +317,7 @@ m256nonce(uint64_t addr,
 
 void *
 work_i(void *x_void_ptr) {
-    uint64_t i = *(uint64_t *)x_void_ptr;
-
+	uint64_t i = *(uint64_t *)x_void_ptr;
     uint32_t n;
 
     for (n = 0; n < noncesperthread; n += noncearguments) {
@@ -339,6 +338,20 @@ work_i(void *x_void_ptr) {
         else { // STANDARD
             nonce(addr, (i + n), (uint64_t)(i - startnonce + n));
         }
+
+        // If verbose mode is set print out actual nonce plot state
+		if (verbose == 1) {
+			static unsigned int oldn = 1;
+
+			if (oldn != n) {
+				oldn = n;
+				printf("Nonces %lu from %u nonces %2.2f %% done...\r\n",
+						((uint64_t)(n * threads)) + run, nonces,
+						((float) ((n * threads) + run) / (float) nonces) * 100);
+				fflush(stdout);
+			}
+		}
+
     }
     return NULL;
 }
@@ -357,7 +370,7 @@ getMS() {
 /* {{{ usage */
 
 void usage(char **argv) {
-    printf("Usage: %s -k KEY [ -x CORE ] [-d DIRECTORY] [-s STARTNONCE] [-n NONCES] [-m STAGGERSIZE] [-t THREADS] [-b MAXMEMORY] [-p PLOTFILESIZE] [-a] [-R]\n\n", argv[0]);
+    printf("Usage: %s -k KEY [ -x CORE ] [-v VERBOSE] [-d DIRECTORY] [-s STARTNONCE] [-n NONCES] [-m STAGGERSIZE] [-t THREADS] [-b MAXMEMORY] [-p PLOTFILESIZE] [-a] [-R]\n\n", argv[0]);
     printf("   see README.md\n");
     exit(-1);
 }
@@ -374,7 +387,7 @@ writecache(void *arguments) {
     percent = ((double)100 * lastrun / nonces);
 
     if (lastseconds) {
-        printf("\33[2K\r%5.2f%% done. %i nonces per minute, %02i:%02i:%02i left [writing%s]",
+        printf("\r\n\33[2K\r%5.2f%% done. %i nonces per minute, %02i:%02i:%02i left [writing%s]",
                 percent, (lastspeed * 60), lasthours, lastminutes, lastseconds, (asyncmode) ? " asynchronously" : "");
     } else {
         printf("\33[2K\r%5.2f%% done. [writing%s]",
@@ -407,7 +420,7 @@ writecache(void *arguments) {
     lastminutes    = remainder / 60;;
     lastseconds    = remainder % 60;
 
-    printf("\33[2K\r%5.2f%% done. %i nonces per minute, %02i:%02i:%02i left", percent, (lastspeed * 60), lasthours, lastminutes, lastseconds);
+    printf("\r\n\33[2K\r%5.2f%% done. %i nonces per minute, %02i:%02i:%02i left", percent, (lastspeed * 60), lasthours, lastminutes, lastseconds);
     fflush(stdout);
 
     return NULL;
