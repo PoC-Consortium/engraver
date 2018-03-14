@@ -1,12 +1,22 @@
 #!/usr/bin/env perl
 # For Emacs: -*- mode:cperl -*-
 
+
 use strict;
 use warnings;
+
+use Carp;
+use Getopt::Long;                                                # command line options processing
 
 my $plotbin  = './plot64';
 my $md5sum   = ($^O eq "darwin") ? 'md5 -q' : 'md5sum';
 my $expected = "3ba11bee42182e0684df470d420c813e";
+my $keep = 0;
+
+GetOptions(
+    'keep'  => \$keep,             # keep generated test files
+) or croak "Formal error processing command line options!";
+
 
 if (! -x $plotbin) {
     print "$plotbin binary not present. Compile it first.\n";
@@ -33,7 +43,7 @@ else {
 }
 
 # cleanup
-qx{rm -rf core0 core1 core2};
+qx{rm -rf core0 core1 core2} if (!$keep);
 
 sub cmp_digest {
     my $file   = shift;

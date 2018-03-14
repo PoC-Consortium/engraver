@@ -76,8 +76,6 @@ char *outputdir = DEFAULTDIR;
     gendata[NONCE_SIZE + offset + 6] = xv[1];  \
     gendata[NONCE_SIZE + offset + 7] = xv[0]
 
-/* }}} */
-
 #if __APPLE__
 
 // A fallocate implementation for macOS
@@ -108,15 +106,16 @@ int posix_fallocate(int fd, off_t offset, off_t len) {
     return res;
 }
 
+// Also, on MacOS, there is no lseek64. off_t is already 64 bit
+#define LSEEK lseek
+
+#else    // On Linux, use lseek64
+
+#define LSEEK lseek64
+
 #endif
 
-#if __APPLE__
-// On MacOS, there is no lseek64. off_t is already 64 bit
-#define LSEEK lseek
-#else
-// On Linux, use lseek64
-#define LSEEK lseek64
-#endif
+/* }}} */
 
 /* {{{ nonce             original algorithm */
 
@@ -357,7 +356,7 @@ work_i(void *x_void_ptr) {
 }
 
 /* }}} */
-/* {{{ getMS */
+/* {{{ getMS             get miliseconds    */
 
 uint64_t
 getMS() {
@@ -367,7 +366,7 @@ getMS() {
 }
 
 /* }}} */
-/* {{{ usage */
+/* {{{ usage             print usage info   */
 
 void usage(char **argv) {
     printf("Usage: %s -k KEY [ -x CORE ] [-v VERBOSE] [-d DIRECTORY] [-s STARTNONCE] [-n NONCES] [-m STAGGERSIZE] [-t THREADS] [-b MAXMEMORY] [-p PLOTFILESIZE] [-a] [-R]\n\n", argv[0]);
@@ -376,7 +375,8 @@ void usage(char **argv) {
 }
 
 /* }}} */
-/* {{{ writecache */
+
+/* {{{ writecache  */
 
 void *
 writecache(void *arguments) {
@@ -427,7 +427,6 @@ writecache(void *arguments) {
 }
 
 /* }}} */
-
 /* {{{ writestatus */
 
 void
@@ -651,7 +650,8 @@ int main(int argc, char **argv) {
                 printf("All nonces would fit in memory, but number of nonces is not divisible by threads * %d. Adjusting nonces from %d to %d.\n",
                         noncearguments, nonces, (nonces - (nonces % (threads * noncearguments))));
                 nonces -= (nonces % (threads * noncearguments));
-            } else {
+            }
+            else {
                 printf("All nonces will fit in memory. Setting stagger size to %d\n", nonces);
             }
             staggersize = nonces;
