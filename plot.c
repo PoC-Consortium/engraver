@@ -420,7 +420,7 @@ writecache(void *arguments) {
 void
 writestatus(void) {
     // Write current status to the end of the file
-    if ( lseek64(ofd, -sizeof run, SEEK_END) < 0 ) {
+    if ( LSEEK(ofd, -sizeof run, SEEK_END) < 0 ) {
         printf("\n\nError while lseek()ing in file: %d\n\n", errno);
         exit(1);
     }
@@ -735,7 +735,7 @@ int main(int argc, char **argv) {
         uint32_t id;
 
         // Read last status from the end of the file
-        if ( lseek64(ofd, -sizeof run - sizeof id, SEEK_END) < 0 ) {
+        if ( LSEEK(ofd, -sizeof run - sizeof id, SEEK_END) < 0 ) {
 
             printf("\n\nError while lseek()ing in file: %d\n\n", errno);
             exit(1);
@@ -765,7 +765,7 @@ int main(int argc, char **argv) {
             printf("Done pre-allocating space.\n");
         }
         // Write resume id to the end of the file
-        if ( lseek64(ofd, -sizeof run - sizeof resumeid, SEEK_END) < 0 ) {
+        if ( LSEEK(ofd, -sizeof run - sizeof resumeid, SEEK_END) < 0 ) {
             printf("\n\nError while lseek()ing in file: %d\n\n", errno);
             exit(1);
         }
