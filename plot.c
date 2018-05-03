@@ -115,6 +115,19 @@ int posix_fallocate(int fd, off_t offset, off_t len) {
 
 #endif
 
+
+int use_direct_io = 0;
+
+static void *alloc(size_t nmemb, size_t size) {
+    if (! use_direct_io) {
+        return calloc( nmemb, size );
+    }
+    else {
+        // allocate memory on a 4K boundary for O_DIRECT.  Otherwise `write` gives `errno` 22
+        return aligned_alloc( 4096, nmemb * size );
+    }
+}
+
 /* }}} */
 
 /* {{{ nonce             original algorithm */
@@ -369,7 +382,7 @@ getMS() {
 /* {{{ usage             print usage info   */
 
 void usage(char **argv) {
-    printf("Usage: %s -k KEY [ -x CORE ] [-v VERBOSE] [-d DIRECTORY] [-s STARTNONCE] [-n NONCES] [-m STAGGERSIZE] [-t THREADS] [-b MAXMEMORY] [-p PLOTFILESIZE] [-a] [-R]\n\n", argv[0]);
+    printf("Usage: %s -k KEY [ -x CORE ] [-v VERBOSE] [-d DIRECTORY] [-s STARTNONCE] [-n NONCES] [-m STAGGERSIZE] [-t THREADS] [-b MAXMEMORY] [-p PLOTFILESIZE] [-a] [-R] [-D]\n\n", argv[0]);
     printf("   see README.md\n");
     exit(-1);
 }
@@ -403,6 +416,7 @@ writecache(void *arguments) {
             exit(1);
         }
         if ( write(ofd, &wcache[cacheposition], cacheblocksize) < 0 ) {
+            perror("writecache");
             printf("\n\nError while writing to file: %d\n\n", errno);
             exit(1);
         }
@@ -437,6 +451,7 @@ writestatus(void) {
         exit(1);
     }
     if ( write(ofd, &run, sizeof run) < 0 ) {
+        perror("writestatus");
         printf("\n\nError while writing to file: %d\n\n", errno);
         exit(1);
     }
@@ -473,6 +488,11 @@ int main(int argc, char **argv) {
 
         if (!strcmp(argv[i],"-R")) {
             resume = 1;
+            continue;
+        }
+
+        if (!strcmp(argv[i],"-D")) {
+            use_direct_io = 1;
             continue;
         }
 
@@ -703,8 +723,8 @@ int main(int argc, char **argv) {
     }
 
     if (asyncmode == 1) {
-        acache[0] = calloc( NONCE_SIZE, staggersize );
-        acache[1] = calloc( NONCE_SIZE, staggersize );
+        acache[0] = alloc( NONCE_SIZE, staggersize );
+        acache[1] = alloc( NONCE_SIZE, staggersize );
 
         if (acache[0] == NULL || acache[1] == NULL) {
             printf("Error allocating memory. Try lower stagger size or removing ASYNC mode.\n");
@@ -712,7 +732,7 @@ int main(int argc, char **argv) {
         }
     }
     else {
-        cache = calloc( NONCE_SIZE, staggersize );
+        cache = alloc( NONCE_SIZE, staggersize );
 
         if (cache == NULL) {
             printf("Error allocating memory. Try lower stagger size.\n");
@@ -737,9 +757,16 @@ int main(int argc, char **argv) {
 #if __APPLE__
     ofd = open(name, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
 #else
-    ofd = open(name, O_CREAT | O_LARGEFILE | O_RDWR, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+    if (! use_direct_io) {
+        ofd = open(name, O_CREAT | O_LARGEFILE | O_RDWR, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+    }
+    else {
+        printf("Using Direct I/O to avoid flushing buffer cache\n");
+        ofd = open(name, O_CREAT | O_LARGEFILE | O_RDWR | O_DIRECT, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
+    }
 #endif
     if (ofd < 0) {
+        perror(name);
         printf("Error opening file %s\n", name);
         exit(1);
     }
@@ -778,15 +805,18 @@ int main(int argc, char **argv) {
             printf("Done pre-allocating space.\n");
         }
         // Write resume id to the end of the file
-        if ( LSEEK(ofd, -sizeof run - sizeof resumeid, SEEK_END) < 0 ) {
-            printf("\n\nError while lseek()ing in file: %d\n\n", errno);
-            exit(1);
+        if (! use_direct_io) {
+            if ( LSEEK(ofd, -sizeof run - sizeof resumeid, SEEK_END) < 0 ) {
+                printf("\n\nError while lseek()ing in file: %d\n\n", errno);
+                exit(1);
+            }
+            if ( write(ofd, &resumeid, sizeof resumeid) < 0 ) {
+                perror("write");
+                printf("\n\nError while writing to file: %d\n\n", errno);
+                exit(1);
+            }
+            writestatus();
         }
-        if ( write(ofd, &resumeid, sizeof resumeid) < 0 ) {
-            printf("\n\nError while writing to file: %d\n\n", errno);
-            exit(1);
-        }
-        writestatus();
     }
 
     // Threads:
@@ -885,7 +915,9 @@ int main(int argc, char **argv) {
             }
             pthread_join(writeworker, NULL);
         }
-        writestatus();
+        if (! use_direct_io) {
+            writestatus();
+        }
 
         startnonce += staggersize;
     }
