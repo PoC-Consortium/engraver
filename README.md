@@ -37,7 +37,7 @@ rico666 <bots@cryptoguru.org>                 (Don't donate)
 ### Usage:
 
 ```bash
-./plot64 -k KEY [-x <core>] [-d <dir>] [-s <startnonce>] [-n <nonces>] [-m <staggersize>] [-t <threads>] [-a]
+./plot64 -k KEY [-x <core>] [-d <dir>] [-s <startnonce>] [-n <nonces>] [-m <staggersize>] [-t <threads>] [-a] [-D]
   -a
     Flag to use asynchronous writing mode. If this is set, the plotter can work
     even while data is being written to disk. It will give you more speed at the
@@ -100,6 +100,10 @@ rico666 <bots@cryptoguru.org>                 (Don't donate)
     these instruction sets. Otherwise the program will throw an "illegal instruction"
     error. You can assume a roughly 2x speed increase default->SSE4->AVX2 with
     AVX2 being roughly 4x faster than default. See also "Notes" below!
+
+  -D
+    Use Direct I/O to avoid making the system very slow by flushing the buffer
+    cache.
 
  ```
 
