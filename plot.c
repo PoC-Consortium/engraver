@@ -123,8 +123,19 @@ static void *alloc(size_t nmemb, size_t size) {
         return calloc( nmemb, size );
     }
     else {
+
+#if __APPLE__
         // allocate memory on a 4K boundary for O_DIRECT.  Otherwise `write` gives `errno` 22
+        void* return_ptr;
+        int err = posix_memalign(&return_ptr, 4096, nmemb * size);
+        if (err) {
+            printf("\n\nError while allocating memory with posix_memalign: %d\n\n", errno);
+            exit(1);
+        }
+        return return_ptr;        
+#else
         return aligned_alloc( 4096, nmemb * size );
+#endif
     }
 }
 
