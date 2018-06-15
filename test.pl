@@ -10,7 +10,7 @@ use Getopt::Long;                                                # command line 
 
 my $plotbin  = './plot64';
 my $md5sum   = ($^O eq "darwin") ? 'md5 -q' : 'md5sum';
-my $expected = "3ba11bee42182e0684df470d420c813e";
+my $expected = '4f81804ea010744877163a87f56fc225';
 my $keep = 0;
 
 GetOptions(
@@ -26,11 +26,11 @@ if (! -x $plotbin) {
 
 # Test Core 0 (scalar)
 print qx{$plotbin -a -v -k 11424087411148401423 -d core0 -x 0 -s 0 -n 128 -t 4};
-cmp_digest('core0/11424087411148401423_0_128_128', $expected);
+cmp_digest('core0/11424087411148401423_0_128', $expected);
 
 # Test Core 1 (SSE4)
 print qx{$plotbin -a -v -k 11424087411148401423 -d core1 -x 1 -s 0 -n 128 -t 4};
-cmp_digest('core1/11424087411148401423_0_128_128', $expected);
+cmp_digest('core1/11424087411148401423_0_128', $expected);
 
 # Test Core 2 (AVX2) if not on TRAVIS
 if (defined $ENV{TRAVIS} && $ENV{TRAVIS} =~ m{true}xmsi) {
@@ -39,7 +39,7 @@ if (defined $ENV{TRAVIS} && $ENV{TRAVIS} =~ m{true}xmsi) {
 else {
     print qx{$plotbin -a -v -k 11424087411148401423 -d core2 -x 2 -s 0 -n 128 -t 4};
 
-    cmp_digest('core2/11424087411148401423_0_128_128', $expected);
+    cmp_digest('core2/11424087411148401423_0_128', $expected);
 }
 
 # cleanup

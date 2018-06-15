@@ -38,4 +38,4 @@ test:		plot64
 		./test.pl
 
 clean:
-		rm -f mshabal_sse4.o mshabal256_avx2.o shabal64.o shabal64-darwin.o helper64.o plot64 helper64.o cg_obup.tgz bin/*
+		rm -rf mshabal_sse4.o mshabal256_avx2.o shabal64.o shabal64-darwin.o helper64.o plot64 helper64.o cg_obup.tgz bin/* core*

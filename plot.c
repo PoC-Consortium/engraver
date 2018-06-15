@@ -1,6 +1,4 @@
-/* For Emacs: -*- mode:c; eval: (folding-mode 1) -*-
-   Usage: ./plot64 -k <public key> -x <core> -s <start nonce> -n <nonces> -m <stagger size> -t <threads>
-*/
+/* For Emacs: -*- mode:c; eval: (folding-mode 1) -*- */
 
 /* {{{ include, define, vars */
 
@@ -40,7 +38,7 @@
 // Otherwise we overflow the stack on macOS, which has a default
 // pthread stack size of 512KB.  Linux's default is 8MB
 // I believe 4MB "works" but using 8MB to match Linux.
-#define REQUIRED_STACK_SIZE (8*1048576)
+#define REQUIRED_STACK_SIZE (8 * 1048576)
 
 uint64_t addr        = 0;
 uint64_t startnonce  = 0;
@@ -170,9 +168,13 @@ void nonce(uint64_t addr, uint64_t nonce, uint64_t cachepos) {
         *start ^= fint[3]; start++;
     }
 
-    // Sort them:
-    for (uint32_t i = 0; i < NONCE_SIZE; i += SCOOP_SIZE)
-        memmove(&cache[cachepos * SCOOP_SIZE + (uint64_t)i * staggersize], &gendata[i], SCOOP_SIZE);
+    // Sort them (PoC2):
+    uint64_t revPosition = NONCE_SIZE-SCOOP_SIZE;
+    for (uint32_t i = 0; i < NONCE_SIZE; i += SCOOP_SIZE){
+        memmove(&cache[cachepos * SCOOP_SIZE + (uint64_t)i * staggersize], &gendata[i], 32);
+        memmove(&cache[cachepos * SCOOP_SIZE + 32 + revPosition * staggersize], &gendata[i+32], 32);
+        revPosition -= SCOOP_SIZE;
+    }
 }
 
 /* }}} */
@@ -226,12 +228,18 @@ mnonce(uint64_t addr,
         gendata4[i] ^= (final4[i % 32]);
     }
 
-    // Sort them:
+    // Sort them (PoC2):
+    uint64_t revPosition = NONCE_SIZE-SCOOP_SIZE;
     for (int i = 0; i < NONCE_SIZE; i += 64) {
-        memmove(&cache[cachepos1 * 64 + (uint64_t)i * staggersize], &gendata1[i], 64);
-        memmove(&cache[cachepos2 * 64 + (uint64_t)i * staggersize], &gendata2[i], 64);
-        memmove(&cache[cachepos3 * 64 + (uint64_t)i * staggersize], &gendata3[i], 64);
-        memmove(&cache[cachepos4 * 64 + (uint64_t)i * staggersize], &gendata4[i], 64);
+        memmove(&cache[cachepos1 * 64 + (uint64_t)i * staggersize], &gendata1[i], 32);
+        memmove(&cache[cachepos2 * 64 + (uint64_t)i * staggersize], &gendata2[i], 32);
+        memmove(&cache[cachepos3 * 64 + (uint64_t)i * staggersize], &gendata3[i], 32);
+        memmove(&cache[cachepos4 * 64 + (uint64_t)i * staggersize], &gendata4[i], 32);
+        memmove(&cache[cachepos1 * 64 + 32 + revPosition * staggersize], &gendata1[i+32], 32);
+        memmove(&cache[cachepos2 * 64 + 32 + revPosition * staggersize], &gendata2[i+32], 32);
+        memmove(&cache[cachepos3 * 64 + 32 + revPosition * staggersize], &gendata3[i+32], 32);
+        memmove(&cache[cachepos4 * 64 + 32 + revPosition * staggersize], &gendata4[i+32], 32);
+        revPosition -= SCOOP_SIZE;
     }
 
     return 0;
@@ -310,18 +318,28 @@ m256nonce(uint64_t addr,
       gendata8[i] ^= final8[i % 32];
     }
 
-    // Sort them:
+    // Sort them (PoC2):
+    uint64_t revPosition = NONCE_SIZE-SCOOP_SIZE;
     for (int i = 0; i < NONCE_SIZE; i += 64) {
-      memmove(&cache[cachepos * 64 +       (uint64_t)i * staggersize], &gendata1[i], 64);
-      memmove(&cache[cachepos * 64 +  64 + (uint64_t)i * staggersize], &gendata2[i], 64);
-      memmove(&cache[cachepos * 64 + 128 + (uint64_t)i * staggersize], &gendata3[i], 64);
-      memmove(&cache[cachepos * 64 + 192 + (uint64_t)i * staggersize], &gendata4[i], 64);
-      memmove(&cache[cachepos * 64 + 256 + (uint64_t)i * staggersize], &gendata5[i], 64);
-      memmove(&cache[cachepos * 64 + 320 + (uint64_t)i * staggersize], &gendata6[i], 64);
-      memmove(&cache[cachepos * 64 + 384 + (uint64_t)i * staggersize], &gendata7[i], 64);
-      memmove(&cache[cachepos * 64 + 448 + (uint64_t)i * staggersize], &gendata8[i], 64);
+        memmove(&cache[cachepos * 64 +       (uint64_t)i * staggersize], &gendata1[i], 32);
+        memmove(&cache[cachepos * 64 +  64 + (uint64_t)i * staggersize], &gendata2[i], 32);
+        memmove(&cache[cachepos * 64 + 128 + (uint64_t)i * staggersize], &gendata3[i], 32);
+        memmove(&cache[cachepos * 64 + 192 + (uint64_t)i * staggersize], &gendata4[i], 32);
+        memmove(&cache[cachepos * 64 + 256 + (uint64_t)i * staggersize], &gendata5[i], 32);
+        memmove(&cache[cachepos * 64 + 320 + (uint64_t)i * staggersize], &gendata6[i], 32);
+        memmove(&cache[cachepos * 64 + 384 + (uint64_t)i * staggersize], &gendata7[i], 32);
+        memmove(&cache[cachepos * 64 + 448 + (uint64_t)i * staggersize], &gendata8[i], 32);
+        memmove(&cache[cachepos * 64 +     + 32 + revPosition * staggersize], &gendata1[i+32], 32);
+        memmove(&cache[cachepos * 64 +  64 + 32 + revPosition * staggersize], &gendata2[i+32], 32);
+        memmove(&cache[cachepos * 64 + 128 + 32 + revPosition * staggersize], &gendata3[i+32], 32);
+        memmove(&cache[cachepos * 64 + 192 + 32 + revPosition * staggersize], &gendata4[i+32], 32);
+        memmove(&cache[cachepos * 64 + 256 + 32 + revPosition * staggersize], &gendata5[i+32], 32);
+        memmove(&cache[cachepos * 64 + 320 + 32 + revPosition * staggersize], &gendata6[i+32], 32);
+        memmove(&cache[cachepos * 64 + 384 + 32 + revPosition * staggersize], &gendata7[i+32], 32);
+        memmove(&cache[cachepos * 64 + 448 + 32 + revPosition * staggersize], &gendata8[i+32], 32);
+        revPosition -= SCOOP_SIZE;
     }
-
+  
     return 0;
 }
 // }}}
@@ -335,36 +353,36 @@ work_i(void *x_void_ptr) {
     for (n = 0; n < noncesperthread; n += noncearguments) {
         if (selecttype == 1) { // SSE4
             mnonce(addr,
-                    (i + n), (i + n + 1), (i + n + 2), (i + n + 3),
-                    (uint64_t)(i - startnonce + n),
-                    (uint64_t)(i - startnonce + n + 1),
-                    (uint64_t)(i - startnonce + n + 2),
-                    (uint64_t)(i - startnonce + n + 3));
+                   (i + n), (i + n + 1), (i + n + 2), (i + n + 3),
+                   (uint64_t)(i - startnonce + n),
+                   (uint64_t)(i - startnonce + n + 1),
+                   (uint64_t)(i - startnonce + n + 2),
+                   (uint64_t)(i - startnonce + n + 3));
         }
         else if (selecttype == 2) { // AVX2
             m256nonce(addr,
-                    (i + n + 0), (i + n + 1), (i + n + 2), (i + n + 3),
-                    (i + n + 4), (i + n + 5), (i + n + 6), (i + n + 7),
-                    (i - startnonce + n));
+                      (i + n + 0), (i + n + 1), (i + n + 2), (i + n + 3),
+                      (i + n + 4), (i + n + 5), (i + n + 6), (i + n + 7),
+                      (i - startnonce + n));
         }
         else { // STANDARD
             nonce(addr, (i + n), (uint64_t)(i - startnonce + n));
         }
 
         // If verbose mode is set print out actual nonce plot state
-		if (verbose == 1) {
-			static unsigned int oldn = 1;
+        if (verbose == 1) {
+            static unsigned int oldn = 1;
 
-			if (oldn != n) {
-				oldn = n;
-				printf("Nonces %lu from %u nonces %2.2f %% done...\r\n",
-						((uint64_t)(n * threads)) + run, nonces,
-						((float) ((n * threads) + run) / (float) nonces) * 100);
-				fflush(stdout);
-			}
-		}
-
+            if (oldn != n) {
+                oldn = n;
+                printf("Nonces %lu from %u nonces %2.2f %% done...\r\n",
+                       ((uint64_t)(n * threads)) + run, nonces,
+                       ((float) ((n * threads) + run) / (float) nonces) * 100);
+                fflush(stdout);
+            }
+        }
     }
+
     return NULL;
 }
 
@@ -401,10 +419,11 @@ writecache(void *arguments) {
 
     if (lastseconds) {
         printf("\r\n\33[2K\r%5.2f%% done. %i nonces per minute, %02i:%02i:%02i left [writing%s]",
-                percent, (lastspeed * 60), lasthours, lastminutes, lastseconds, (asyncmode) ? " asynchronously" : "");
-    } else {
+               percent, (lastspeed * 60), lasthours, lastminutes, lastseconds, (asyncmode) ? " asynchronously" : "");
+    }
+    else {
         printf("\33[2K\r%5.2f%% done. [writing%s]",
-                percent, (asyncmode) ? " asynchronously" : "");
+               percent, (asyncmode) ? " asynchronously" : "");
     }
     fflush(stdout);
 
@@ -744,8 +763,8 @@ int main(int argc, char **argv) {
 
     char name[200];
     char finalname[200];
-    sprintf(name, "%s%"PRIu64"_%"PRIu64"_%u_%u.plotting", outputdir, addr, startnonce, nonces, nonces);
-    sprintf(finalname, "%s%"PRIu64"_%"PRIu64"_%u_%u", outputdir, addr, startnonce, nonces, nonces);
+    sprintf(name, "%s%"PRIu64"_%"PRIu64"_%u.plotting", outputdir, addr, startnonce, nonces);
+    sprintf(finalname, "%s%"PRIu64"_%"PRIu64"_%u", outputdir, addr, startnonce, nonces);
 
     int readconfig = 0;
     if ( !resume ) {

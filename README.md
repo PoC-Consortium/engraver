@@ -1,17 +1,15 @@
-#CG_OBUP
+#ENGRAVER
 =============
 
 [![Build Status](https://travis-ci.org/jake-b/cg_obup.svg?branch=master)](https://travis-ci.org/jake-b/cg_obup)
 
-This is the CryptoGuru Optimized BURSTcoin Plotter -
-a BURST coin plotter that generates optimized plot files
-without the need to run an optimizer after plotting.
+This is the PoCC reference plotter for Burstcoin.
 
-It is intended to work on any UNIX system with a sufficiently sane
-filesystem (able to pre-allocate space), but for now only Linux
-and MacOS has been tested. 64bit only!
+It generates PoC2 files and is intended to work on any UNIX system
+with a sufficiently sane filesystem (able to pre-allocate space), but
+for now only Linux and MacOS has been tested. 64bit only!
 
-dcct -> mdcct -> omdcct -> cg_obup
+dcct -> mdcct -> omdcct -> cg_obup -> engraver
 
 This version has some heritage and several people worked on
 the code base until the result was what you see here.
@@ -165,5 +163,6 @@ When mining it is recommended to add the option ```ro``` to avoid sudden damages
 
 ### TODO:
 
-* thorough test suite
+* GPU support
 * optimizations
+* BFS support
