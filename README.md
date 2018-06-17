@@ -28,8 +28,8 @@ rico666 <bots@cryptoguru.org>                 (Don't donate)
 
 
 ### Installing
-    git clone https://github.com/PoC-Consortium/cg_obup
-    cd cg_obup
+    git clone https://github.com/PoC-Consortium/engraver
+    cd engraver
     make
 
 ### Usage:
