@@ -42,8 +42,12 @@ else {
     cmp_digest('core2/11424087411148401423_0_128', $expected);
 }
 
+# Test Core 0 with Direct IO
+print qx{$plotbin -D -a -v -k 11424087411148401423 -d core0_dio -x 0 -s 0 -n 128 -t 4};
+cmp_digest('core0_dio/11424087411148401423_0_128_128', $expected);
+
 # cleanup
-qx{rm -rf core0 core1 core2} if (!$keep);
+qx{rm -rf core0 core1 core2 core0_dio} if (!$keep);
 
 sub cmp_digest {
     my $file   = shift;
