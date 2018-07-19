@@ -14,7 +14,7 @@ all:		plot64
 dist:		clean all
 		mkdir bin
 		mv plot64 bin
-		tar -czf cg_obup.tgz *
+		tar -czf engraver.tgz bin LICENSE README.md
 
 plot64:	        plot.c $(SHABAL) helper64.o mshabal_sse4.o mshabal256_avx2.o 
 		$(CC) $(CFLAGS) -o plot64 plot.c $(SHABAL) helper64.o mshabal_sse4.o mshabal256_avx2.o -lpthread -std=gnu99
@@ -38,4 +38,4 @@ test:		plot64
 		./test.pl
 
 clean:
-		rm -rf mshabal_sse4.o mshabal256_avx2.o shabal64.o shabal64-darwin.o helper64.o plot64 helper64.o cg_obup.tgz bin/* core*
+		rm -rf mshabal_sse4.o mshabal256_avx2.o shabal64.o shabal64-darwin.o helper64.o plot64 helper64.o engraver.tgz bin/* core*

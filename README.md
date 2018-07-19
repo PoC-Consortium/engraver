@@ -1,8 +1,6 @@
 #ENGRAVER
 =============
 
-[![Build Status](https://travis-ci.org/jake-b/cg_obup.svg?branch=master)](https://travis-ci.org/jake-b/cg_obup)
-
 This is the PoCC reference plotter for Burstcoin.
 
 It generates PoC2 files and is intended to work on any UNIX system
