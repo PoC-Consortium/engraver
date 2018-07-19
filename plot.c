@@ -824,18 +824,16 @@ int main(int argc, char **argv) {
             printf("Done pre-allocating space.\n");
         }
         // Write resume id to the end of the file
-        if (! use_direct_io) {
-            if ( LSEEK(ofd, -sizeof run - sizeof resumeid, SEEK_END) < 0 ) {
-                printf("\n\nError while lseek()ing in file: %d\n\n", errno);
-                exit(1);
-            }
-            if ( write(ofd, &resumeid, sizeof resumeid) < 0 ) {
-                perror("write");
-                printf("\n\nError while writing to file: %d\n\n", errno);
-                exit(1);
-            }
-            writestatus();
+        if ( LSEEK(ofd, -sizeof run - sizeof resumeid, SEEK_END) < 0 ) {
+            printf("\n\nError while lseek()ing in file: %d\n\n", errno);
+            exit(1);
         }
+        if ( write(ofd, &resumeid, sizeof resumeid) < 0 ) {
+            perror("write");
+            printf("\n\nError while writing to file: %d\n\n", errno);
+            exit(1);
+        }
+        writestatus();
     }
 
     // Threads:
@@ -934,9 +932,7 @@ int main(int argc, char **argv) {
             }
             pthread_join(writeworker, NULL);
         }
-        if (! use_direct_io) {
-            writestatus();
-        }
+        writestatus();
 
         startnonce += staggersize;
     }
