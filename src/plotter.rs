@@ -167,11 +167,12 @@ impl Plotter {
         }
 
         // determine buffer size
-        let buffer_size = if task.async_io { mem / 2 } else { mem };
-        let (tx_empty_buffers, rx_empty_buffers) = chan::bounded(2);
-        let (tx_full_buffers, rx_full_buffers) = chan::bounded(2);
+        let num_buffer = if task.async_io { 2 } else { 1 };
+        let buffer_size = mem / num_buffer;
+        let (tx_empty_buffers, rx_empty_buffers) = chan::bounded(num_buffer as usize);
+        let (tx_full_buffers, rx_full_buffers) = chan::bounded(num_buffer as usize);
 
-        for _ in 0..2 {
+        for _ in 0..num_buffer {
             let buffer = Buffer::new(buffer_size as usize);
             tx_empty_buffers.send(buffer);
         }
@@ -305,6 +306,7 @@ fn calculate_mem_to_use(
 
     // ensure a minimum buffer
     mem = max(mem, num_buffer * NONCE_SIZE * nonces_per_sector);
+    println!("DEBUG: MEM Bytes{} Nonces{}",mem,mem/NONCE_SIZE);
     mem
 }
 
