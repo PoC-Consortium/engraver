@@ -117,6 +117,9 @@ void sph_shabal256_close(void* cc, void* dst);
  */
 void sph_shabal256_addbits_and_close(void* cc, unsigned ub, unsigned n, void* dst);
 
+// Optimized routine to calculate hashes for nonces
+void sph_shabal_openclose_fast(void *message, void *termination, void* dst, unsigned num);
+
 #ifdef __cplusplus
 }
 #endif
