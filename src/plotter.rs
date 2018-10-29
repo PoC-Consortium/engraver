@@ -306,7 +306,6 @@ fn calculate_mem_to_use(
 
     // ensure a minimum buffer
     mem = max(mem, num_buffer * NONCE_SIZE * nonces_per_sector);
-    println!("DEBUG: MEM Bytes{} Nonces{}",mem,mem/NONCE_SIZE);
     mem
 }
 
