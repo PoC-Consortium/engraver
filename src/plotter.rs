@@ -84,13 +84,32 @@ impl Plotter {
         if !task.quiet {
             println!(
                 "CPU: {} [using {} of {} cores{}{}]",
-                cpu_name, task.cpu_threads, cores, if simd_ext != "" {" + "} else {""}, simd_ext
+                cpu_name,
+                task.cpu_threads,
+                cores,
+                if simd_ext != "" { " + " } else { "" },
+                simd_ext
             );
         }
 
+        let file = Path::new(&task.output_path).join(format!(
+            "{}_{}_{}",
+            task.numeric_id, task.start_nonce, task.nonces
+        ));
+
+        if !file.parent().unwrap().exists() {
+            println!(
+                "Error: specified target path does not exist, path={}",
+                &task.output_path
+            );
+            println!("Shutting down...");
+            return;
+        }
+
         // use all avaiblable disk space if nonce parameter has been omitted
+        let free_disk_space = free_disk_space(&task.output_path);
         if task.nonces == 0 {
-            task.nonces = free_disk_space(&task.output_path) / NONCE_SIZE;
+            task.nonces = free_disk_space / NONCE_SIZE;
         }
 
         // align number of nonces with sector size if direct i/o
@@ -108,8 +127,22 @@ impl Plotter {
 
         let plotsize = task.nonces * NONCE_SIZE;
 
+        // check available disk space
+        if free_disk_space < plotsize {
+            println!(
+                "Error: insufficient disk space, MiB_required={}, MiB_available={}",
+                plotsize as f64 / 1024.0 / 1024.0,
+                free_disk_space as f64 / 1024.0 / 1024.0
+            );
+            println!("Shutting down...");
+            return;
+        }
+
         // calculate memory usage
-        let mem = calculate_mem_to_use(&task, &memory, nonces_per_sector);
+        let mem = match calculate_mem_to_use(&task, &memory, nonces_per_sector){
+            Ok(x) => x,
+            Err(_) => return
+        };
 
         if !task.quiet {
             println!(
@@ -131,11 +164,6 @@ impl Plotter {
                 }
             );
         }
-
-        let file = Path::new(&task.output_path).join(format!(
-            "{}_{}_{}",
-            task.numeric_id, task.start_nonce, task.nonces
-        ));
 
         if !task.quiet {
             println!("Output File: {}\n", file.display());
@@ -218,9 +246,9 @@ impl Plotter {
         let task = Arc::new(task);
 
         // hi bold! might make this optional in future releases.
+        let thread_pinning = true;
         let mut core_ids: Vec<core_affinity::CoreId> = Vec::new();
 
-        let thread_pinning = true;
         if thread_pinning {
             core_ids = core_affinity::get_core_ids().unwrap();
         }
@@ -288,9 +316,23 @@ fn calculate_mem_to_use(
     task: &PlotterTask,
     memory: &sys_info::MemInfo,
     nonces_per_sector: u64,
-) -> u64 {
+) -> Result<u64, &'static str> {
     let plotsize = task.nonces * NONCE_SIZE;
-    let mut mem = task.mem.parse::<Bytes>().unwrap().size() as u64;
+
+    let mut mem = match task.mem.parse::<Bytes>() {
+        Ok(x) => x.size() as u64,
+        Err(_) => { println!(
+                "Error: Can't parse memory limit parameter, input={}",
+                task.mem,
+            );
+            println!("\nPlease specify a number followed by a unit. If no unit is provided, bytes will be assumed.");
+            println!("Supported units: B, KiB, MiB, GiB, TiB, PiB, EiB, KB, MB, GB, TB, PB, EB");           
+            println!("Example: --mem 10GiB\n");           
+            println!("Shutting down...");
+            return Err("invalid unit");
+        }
+    };
+    
     if mem == 0 {
         mem = plotsize;
     }
@@ -306,7 +348,7 @@ fn calculate_mem_to_use(
 
     // ensure a minimum buffer
     mem = max(mem, num_buffer * NONCE_SIZE * nonces_per_sector);
-    mem
+    Ok(mem)
 }
 
 fn detect_simd() -> String {

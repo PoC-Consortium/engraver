@@ -102,7 +102,7 @@ pub fn hash(tx: Sender<u64>, hasher_task: HasherTaskInfo, simd_ext: String) -> i
                     hasher_task.numeric_id,
                     hasher_task.local_startnonce,
                     hasher_task.local_nonces,
-                ),                
+                ),
                 _ => noncegen(
                     hasher_task.cache.ptr,
                     hasher_task.cache_size,
