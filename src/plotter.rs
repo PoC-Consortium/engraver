@@ -173,7 +173,17 @@ impl Plotter {
             if !task.quiet {
                 print!("File already exists, reading resume info...");
             }
-            progress = read_resume_info(&file);
+            let resume_info = read_resume_info(&file);
+            match resume_info {
+                Ok(x) => progress = x,
+                Err(_) => {
+                    println!("Error");
+                    println!("File is already completed.");
+                    println!("Shutting Down...");
+                    return;
+
+                }
+            }
             if !task.quiet {
                 println!("OK");
             }
