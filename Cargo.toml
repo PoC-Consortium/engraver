@@ -23,6 +23,8 @@ rayon = "1.0"
 core_affinity = "0.5.9"
 stopwatch = "0.0.7"
 fs2 = "0.4.3"
+page_size = "0.4.1"
+aligned_alloc = "0.1"
 
 [target.'cfg(linux)'.dependencies]
 thread-priority = "0.1.0"

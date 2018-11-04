@@ -13,6 +13,7 @@ mod hasher;
 mod plotter;
 mod utils;
 mod writer;
+mod ocl;
 
 use clap::AppSettings::{ArgRequiredElseHelp, DeriveDisplayOrder, VersionlessSubcommands};
 #[cfg(feature = "opencl")]
@@ -22,10 +23,6 @@ use plotter::{Plotter, PlotterTask};
 use utils::set_low_prio;
 
 fn main() {
-    #[cfg(not(feature = "opencl"))]
-    let _opencl = false;
-    #[cfg(feature = "opencl")]
-    let opencl = true;
     let arg = App::new("Engraver")
         .version(crate_version!())
         .author(crate_authors!())
@@ -74,7 +71,7 @@ fn main() {
                         .value_name("numeric_ID")
                         .help("your numeric Burst ID")
                         .takes_value(true)
-                        .required(true),
+                        .required_unless("ocl-devices"),
                 ).arg(
                     Arg::with_name("start nonce")
                         .short("s")
@@ -82,7 +79,7 @@ fn main() {
                         .value_name("start_nonce")
                         .help("where you want to start plotting")
                         .takes_value(true)
-                        .required(true),
+                        .required_unless("ocl-devices"),
                 ).arg(
                     Arg::with_name("nonces")
                         .short("n")
@@ -90,7 +87,7 @@ fn main() {
                         .value_name("nonces")
                         .help("how many nonces you want to plot")
                         .takes_value(true)
-                        .required(true),
+                        .required_unless("ocl-devices"),
                 ).arg(
                     Arg::with_name("path")
                         .short("p")
@@ -120,14 +117,13 @@ fn main() {
                         .short("g")
                         .long("gpu")
                         .value_name("platform_id:device_id")
-                        .help("*GPU(s) you want to use for plotting")
+                        .help("GPU(s) you want to use for plotting (optional)")
                         .multiple(true)
                         .takes_value(true),
                 ]).groups(&[#[cfg(feature = "opencl")]
                 ArgGroup::with_name("processing")
                     .args(&["cpu", "gpu"])
-                    .multiple(true)
-                    .required(true)])
+                    .multiple(true)])
                     /*
                     .arg(
                     Arg::with_name("ssd buffer")
@@ -168,10 +164,24 @@ fn main() {
                 
         )*/;
 
+    #[cfg(feature = "opencl")]
+    let arg = arg.arg(
+            Arg::with_name("ocl-devices")
+                .short("o")
+                .long("opencl")
+                .help("Display OpenCL platforms and devices")
+                .global(true),
+        );
     let matches = &arg.get_matches();
 
     if matches.is_present("low priority") {
         set_low_prio();
+    }
+   
+    if matches.is_present("ocl-devices") {
+        #[cfg(feature = "opencl")]
+        ocl::platform_info();
+        return;
     }
 
     // plotting
@@ -191,7 +201,19 @@ fn main() {
     let mem = value_t!(matches, "memory", String).unwrap_or_else(|_| "0B".to_owned());
     let cpu_threads =
         value_t!(matches, "cpu", u8).unwrap_or_else(|_| sys_info::cpu_num().unwrap() as u8);
+/*
+    if matches.occurrences_of("gpu") > 0 {
+        Some(matches.values_of("file").unwrap().collect();
+        https://stackoverflow.com/questions/26643688/how-do-i-split-a-string-in-rust
+    } else {
+        Nonce
+    }
+    
+    
+    , 1); // notice only one occurrence
+let files: Vec<_> = m.values_of("file").unwrap().collect();
 
+*/
     let p = Plotter::new();
     p.run(PlotterTask {
         numeric_id,

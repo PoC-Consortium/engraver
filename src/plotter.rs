@@ -81,11 +81,22 @@ impl Plotter {
         if !task.quiet {
             println!("Engraver {} - PoC2 Plotter\n", crate_version!());
         }
-        if !task.quiet {
+odroisod
+        
+        #[cfg(feature = "opencl")]
+        let cpu_threads = min(cores, task.cpu_threads as u32);
+        #[cfg(not(feature = "opencl"))]
+        let cpu_threads = if task.cpu_threads == 0 {
+            cores
+        } else {
+            min(cores, task.cpu_threads as u32)
+        };
+
+        if !task.quiet {            
             println!(
                 "CPU: {} [using {} of {} cores{}{}]",
                 cpu_name,
-                task.cpu_threads,
+                cpu_threads,
                 cores,
                 if simd_ext != "" { " + " } else { "" },
                 simd_ext
@@ -173,7 +184,16 @@ impl Plotter {
             if !task.quiet {
                 print!("File already exists, reading resume info...");
             }
-            progress = read_resume_info(&file);
+            let resume_info = read_resume_info(&file);
+            match resume_info {
+                Ok(x) => progress = x,
+                Err(_) => {
+                    println!("Error");
+                    println!("File is already completed.");
+                    println!("Shutting down...");
+                    return
+                }
+            }
             if !task.quiet {
                 println!("OK");
             }
@@ -257,7 +277,7 @@ impl Plotter {
             create_hasher_task(
                 task.clone(),
                 rayon::ThreadPoolBuilder::new()
-                    .num_threads(task.cpu_threads as usize)
+                    .num_threads(cpu_threads as usize)
                     .start_handler(move |id| {
                         if thread_pinning {
                             #[cfg(not(windows))]

@@ -92,7 +92,7 @@ pub fn create_writer_task(
     }
 }
 
-pub fn read_resume_info(file: &Path) -> u64 {
+pub fn read_resume_info(file: &Path) -> Result<u64,u64> {
     let mut file = open_r(&file).unwrap();
     file.seek(SeekFrom::End(-8)).unwrap();
 
@@ -103,9 +103,9 @@ pub fn read_resume_info(file: &Path) -> u64 {
     file.read_exact(&mut double_monkey[0..4]).unwrap();
 
     if double_monkey == [0xAF, 0xFE, 0xAF, 0xFE] {
-        u64::from(as_u32_le(progress))
+        Ok(u64::from(as_u32_le(progress)))
     } else {
-        0
+        Err(0)
     }
 }
 
