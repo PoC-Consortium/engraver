@@ -1,48 +1,10 @@
-<img align="right" src="https://i.imgur.com/PJsPNSG.png" height="200">
- 
- [![Build Status](https://travis-ci.org/PoC-Consortium/engraver.svg?branch=master)](https://travis-ci.org/PoC-Consortium/engraver)
+# XPlotterGui
 
-# Engraver - Burstplotter in Rust
+X-Plotter GUI
 
-### Features
-- windows, linux, unix & macOS
-- x86 64bit 
-- direct and async i/o
-- SIMD support: sse2, avx, avx2, avx512f
-- fastest cpu plotter there is
+Adds the following features to Xplotter:
+SSD Cache
+Plot file merging
+Dual threadding (plotting & moving/merging/poc2conversion)
 
-### Requirements
-- new version of rust [stable toolchain]
-
-### Compile, test, ...
-
-Binaries are in **target/debug** or **target/release** depending on optimization.
-
-``` shell
-# build debug und run directly
-cargo run
-
-# build debug (unoptimized)
-cargo build
-
-# build release (optimized)
-cargo build --release
-
-# test
-cargo test
-```
-
-### Run
-
-```shell
-engraver --help
-```
-
-### Donate 
-* JohnnyDeluxe: BURST-S338-R6VC-LTFA-2GC6G
-  - shabal optimizations
-  - windows support
-* bold: BURST-8V9Y-58B4-RVWP-8HQAV
-  - architecture
-  - linux support
-
+![alt-text](https://raw.githubusercontent.com/JohnnyFFM/XPlotterGui/master/XPlotterGui.png)
