@@ -566,7 +566,6 @@ namespace EngraverGui
                     Application.Exit();
                 }
             }
-
         }
 
         private void resumeFileToolStripMenuItem_Click(object sender, EventArgs e)
@@ -679,6 +678,30 @@ namespace EngraverGui
             {
             }
             return BytesPerSector;
+        }
+
+        private void EngraverForm_FormClosing(object sender, FormClosingEventArgs e)
+        {
+            // check if plotting is active
+            if (btn_start.Text == "Start Plotting")
+            {
+                Application.Exit();
+            }
+            else
+            {
+                if (MessageBox.Show("Plotting in progress, are you sure you want to exit?", "Stop Plotting", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+                {
+                    try
+                    {
+                        p1.Kill();
+                    }
+                    catch
+                    {
+
+                    }
+                    Application.Exit();
+                }
+            }
         }
     }
 }

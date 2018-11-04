@@ -694,6 +694,7 @@
             this.Name = "EngraverForm";
             this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
             this.Text = "Engraver GUI v.2.0.4";
+            this.FormClosing += new System.Windows.Forms.FormClosingEventHandler(this.EngraverForm_FormClosing);
             this.Load += new System.EventHandler(this.EngraverForm_Load);
             this.statusStrip.ResumeLayout(false);
             this.statusStrip.PerformLayout();
