@@ -16,7 +16,6 @@ void noncegen(char *cache, const size_t cache_size, const size_t chunk_offset,
               const unsigned long long numeric_id, const unsigned long long local_startnonce,
               const unsigned long long local_nonces) {
     unsigned long long nonce;
-    size_t len;
 
     char seed[32];  // 64bit numeric account ID, 64bit nonce (blank), 1bit termination, 127 bits zero
     char term[32];  // 1bit 1, 255bit of zeros

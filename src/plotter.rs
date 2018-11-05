@@ -190,8 +190,14 @@ odroisod
                 Err(_) => {
                     println!("Error");
                     println!("File is already completed.");
+<<<<<<< HEAD
                     println!("Shutting down...");
                     return
+=======
+                    println!("Shutting Down...");
+                    return;
+
+>>>>>>> master
                 }
             }
             if !task.quiet {
@@ -211,7 +217,11 @@ odroisod
         }
 
         if !task.quiet {
-            println!("Starting from nonce: {}\n", progress);
+            if progress == 0 {
+                println!("Starting plotting...\n");
+            } else {
+                println!("Resuming plotting from nonce offset {}...\n", progress);
+            }        
         }
 
         // determine buffer size
