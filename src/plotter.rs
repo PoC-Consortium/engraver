@@ -201,7 +201,11 @@ impl Plotter {
         }
 
         if !task.quiet {
-            println!("Starting from nonce: {}\n", progress);
+            if progress == 0 {
+                println!("Starting plotting...\n");
+            } else {
+                println!("Resuming plotting from nonce offset {}...\n", progress);
+            }        
         }
 
         // determine buffer size
