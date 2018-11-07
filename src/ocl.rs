@@ -5,6 +5,9 @@ extern crate page_size;
 use self::core::{
     ArgVal, ContextProperties, DeviceInfo, Event, KernelWorkGroupInfo, PlatformInfo, Status,
 };
+use hasher::SafeCVoid;
+use libc::{c_void, size_t, uint64_t};
+use std::sync::mpsc::{channel, Sender};
 
 //use config::Cfg;
 use plotter::Buffer;
@@ -50,73 +53,40 @@ pub fn platform_info() {
     }
 }
 
-/*
-pub fn gpu_info() {
-    if cfg.gpu_worker_thread_count > 0 {
+pub fn gpu_info(gpus: &Vec<String>) {
+    for gpu in gpus.iter(){
+        let gpu = gpu.split(":").collect::<Vec<&str>>();
+        let platform_id = gpu[0].parse::<usize>().unwrap();
+        let gpu_id = gpu[1].parse::<usize>().unwrap();
+        
         let platform_ids = core::get_platform_ids().unwrap();
-        if cfg.gpu_platform >= platform_ids.len() {
-            println!("OCL: Selected OpenCL platform doesn't exist. Shutting down...");
+        if platform_id >= platform_ids.len() {
+            println!("Error: Selected OpenCL platform doesn't exist.");
+            println!("Shutting down...");
             process::exit(0);
         }
-        let platform = platform_ids[cfg.gpu_platform];
+        let platform = platform_ids[platform_id];
         let device_ids = core::get_device_ids(&platform, None, None).unwrap();
-        if cfg.gpu_device >= device_ids.len() {
-            println!("OCL: Selected OpenCL device doesn't exist. Shutting down...");
+        if gpu_id >= device_ids.len() {
+            println!("Error: Selected OpenCL device doesn't exist");
+            println!("Shutting down...");
             process::exit(0);
         }
-        let device = device_ids[cfg.gpu_device];
-        println!(
-            "OCL: {} - {}",
-            to_string!(core::get_platform_info(platform, PlatformInfo::Name)),
-            to_string!(core::get_platform_info(platform, PlatformInfo::Version))
-        );
-        println!(
-            "GPU: {} - {}",
-            to_string!(core::get_device_info(&device, DeviceInfo::Vendor)),
-            to_string!(core::get_device_info(&device, DeviceInfo::Name))
-        );
+        let device = device_ids[gpu_id];
         match core::get_device_info(&device, DeviceInfo::GlobalMemSize).unwrap() {
             core::DeviceInfoResult::GlobalMemSize(mem) => {
                 println!(
-                    "GPU: RAM={}MiB, Cores={}",
+                    "GPU: {} - {} [RAM={}MiB, Cores={}]",
+                    to_string!(core::get_device_info(&device, DeviceInfo::Vendor)),
+                    to_string!(core::get_device_info(&device, DeviceInfo::Name)),
                     mem / 1024 / 1024,
                     to_string!(core::get_device_info(&device, DeviceInfo::MaxComputeUnits))
-                );
-                println!(
-                    "GPU: RAM usage (estimated)={}MiB",
-                    cfg.gpu_nonces_per_cache * 75 * 2 * cfg.gpu_worker_thread_count / 1024 / 1024
-                        + cfg.gpu_worker_thread_count * 45
-                );
-
-                // yellow card
-                if cfg.gpu_nonces_per_cache * 80 * 2 * cfg.gpu_worker_thread_count / 1024 / 1024
-                    > mem as usize / 1024 / 1024
-                {
-                    println!(
-                        "GPU: Low on GPU memory. If your settings don't work, \
-                         please reduce gpu_worker_threads and/or gpu_nonces_per_cache."
-                    );
-                }
-
-                //red card
-                if cfg.gpu_nonces_per_cache * 72 * 2 * cfg.gpu_worker_thread_count / 1024 / 1024
-                    > mem as usize / 1024 / 1024
-                {
-                    println!(
-                        "GPU: Insufficient GPU memory. Please reduce gpu_worker_threads \
-                         and/or gpu_nonces_per_cache. Shutting down..."
-                    );
-                    process::exit(0);
-                }
+                );               
             }
             _ => panic!("Unexpected error. Can't obtain GPU memory size."),
         }
-    } else if cfg.cpu_worker_thread_count == 0 {
-        println!("Plotting needs  without CPU and GPUCPU, GPU: no workers configured. Shutting down...");
-        process::exit(0);
     }
 }
-*/
 
 pub struct GpuContext {
     context: core::Context,
@@ -199,7 +169,7 @@ impl GpuBuffer {
             memmap: None,
         }
     }
-/*
+    /*
 }
 
 impl Buffer for GpuBuffer {
@@ -296,11 +266,16 @@ impl GpuContext {
     }
 }
 
-pub fn find_best_deadline_gpu(
-    buffer: &GpuBuffer,
-    nonce_count: usize,
-    gensig: [u8; 32],
-) -> (u64, u64) {
+pub fn noncegen_gpu(
+    cache: *mut c_void,
+    cache_size: size_t,
+    chunk_offset: size_t,
+    numeric_id: uint64_t,
+    local_startnonce: uint64_t,
+    local_nonces: uint64_t,
+) {
+    return;
+    /*
     let data = buffer.data.clone();
     let data2 = (*data).lock().unwrap();
     let gpu_context_mtx = (*buffer).get_gpu_context().unwrap();
@@ -415,8 +390,7 @@ pub fn find_best_deadline_gpu(
             None::<&mut Event>,
         ).unwrap();
     }
-
-    (best_deadline[0], best_offset[0])
+    */
 }
 
 fn get_kernel_work_group_size(x: &core::Kernel, y: core::DeviceId) -> usize {

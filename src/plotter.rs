@@ -21,6 +21,8 @@ use utils::preallocate;
 #[cfg(windows)]
 use utils::set_thread_ideal_processor;
 use writer::{create_writer_task, read_resume_info, write_resume_info};
+#[cfg(feature = "opencl")]
+use ocl::gpu_info;
 
 const NONCE_SIZE: u64 = (2 << 17);
 const SCOOP_SIZE: u64 = 64;
@@ -42,6 +44,7 @@ pub struct PlotterTask {
     pub output_path: String,
     pub mem: String,
     pub cpu_threads: u8,
+    pub gpus: Option<Vec<String>>,
     pub direct_io: bool,
     pub async_io: bool,
     pub quiet: bool,
@@ -81,8 +84,7 @@ impl Plotter {
         if !task.quiet {
             println!("Engraver {} - PoC2 Plotter\n", crate_version!());
         }
-odroisod
-        
+
         #[cfg(feature = "opencl")]
         let cpu_threads = min(cores, task.cpu_threads as u32);
         #[cfg(not(feature = "opencl"))]
@@ -92,7 +94,8 @@ odroisod
             min(cores, task.cpu_threads as u32)
         };
 
-        if !task.quiet {            
+        if !task.quiet {
+
             println!(
                 "CPU: {} [using {} of {} cores{}{}]",
                 cpu_name,
@@ -101,6 +104,15 @@ odroisod
                 if simd_ext != "" { " + " } else { "" },
                 simd_ext
             );
+        }
+
+        if !task.quiet {
+            #[cfg(feature = "opencl")]
+            match &task.gpus {
+            Some(x) => {
+                gpu_info(&x)},
+            None => (),
+            };            
         }
 
         let file = Path::new(&task.output_path).join(format!(
@@ -150,9 +162,9 @@ odroisod
         }
 
         // calculate memory usage
-        let mem = match calculate_mem_to_use(&task, &memory, nonces_per_sector){
+        let mem = match calculate_mem_to_use(&task, &memory, nonces_per_sector) {
             Ok(x) => x,
-            Err(_) => return
+            Err(_) => return,
         };
 
         if !task.quiet {
@@ -190,14 +202,8 @@ odroisod
                 Err(_) => {
                     println!("Error");
                     println!("File is already completed.");
-<<<<<<< HEAD
-                    println!("Shutting down...");
-                    return
-=======
                     println!("Shutting Down...");
                     return;
-
->>>>>>> master
                 }
             }
             if !task.quiet {
@@ -221,7 +227,7 @@ odroisod
                 println!("Starting plotting...\n");
             } else {
                 println!("Resuming plotting from nonce offset {}...\n", progress);
-            }        
+            }
         }
 
         // determine buffer size
@@ -351,18 +357,19 @@ fn calculate_mem_to_use(
 
     let mut mem = match task.mem.parse::<Bytes>() {
         Ok(x) => x.size() as u64,
-        Err(_) => { println!(
+        Err(_) => {
+            println!(
                 "Error: Can't parse memory limit parameter, input={}",
                 task.mem,
             );
             println!("\nPlease specify a number followed by a unit. If no unit is provided, bytes will be assumed.");
-            println!("Supported units: B, KiB, MiB, GiB, TiB, PiB, EiB, KB, MB, GB, TB, PB, EB");           
-            println!("Example: --mem 10GiB\n");           
+            println!("Supported units: B, KiB, MiB, GiB, TiB, PiB, EiB, KB, MB, GB, TB, PB, EB");
+            println!("Example: --mem 10GiB\n");
             println!("Shutting down...");
             return Err("invalid unit");
         }
     };
-    
+
     if mem == 0 {
         mem = plotsize;
     }

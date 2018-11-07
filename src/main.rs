@@ -10,10 +10,11 @@ extern crate stopwatch;
 extern crate sys_info;
 
 mod hasher;
+#[cfg(feature = "opencl")]
+mod ocl;
 mod plotter;
 mod utils;
 mod writer;
-mod ocl;
 
 use clap::AppSettings::{ArgRequiredElseHelp, DeriveDisplayOrder, VersionlessSubcommands};
 #[cfg(feature = "opencl")]
@@ -166,26 +167,26 @@ fn main() {
 
     #[cfg(feature = "opencl")]
     let arg = arg.arg(
-            Arg::with_name("ocl-devices")
-                .short("o")
-                .long("opencl")
-                .help("Display OpenCL platforms and devices")
-                .global(true),
-        );
+        Arg::with_name("ocl-devices")
+            .short("o")
+            .long("opencl")
+            .help("Display OpenCL platforms and devices")
+            .global(true),
+    );
     let matches = &arg.get_matches();
 
     if matches.is_present("low priority") {
         set_low_prio();
     }
-   
+
     if matches.is_present("ocl-devices") {
         #[cfg(feature = "opencl")]
         ocl::platform_info();
         return;
     }
-
+    
     // plotting
-    /*
+    /* subcommand
     if let Some(matches) = matches.subcommand_matches("plot") {
     */
     let numeric_id = value_t!(matches, "numeric id", u64).unwrap_or_else(|e| e.exit());
@@ -201,19 +202,18 @@ fn main() {
     let mem = value_t!(matches, "memory", String).unwrap_or_else(|_| "0B".to_owned());
     let cpu_threads =
         value_t!(matches, "cpu", u8).unwrap_or_else(|_| sys_info::cpu_num().unwrap() as u8);
-/*
-    if matches.occurrences_of("gpu") > 0 {
-        Some(matches.values_of("file").unwrap().collect();
-        https://stackoverflow.com/questions/26643688/how-do-i-split-a-string-in-rust
+    
+    let gpus = if matches.occurrences_of("gpu") > 0 {
+        let gpu = values_t!(matches, "gpu", String).unwrap_or(Vec::new());
+        if gpu.len() > 0 {
+            Some(gpu)
+        } else {
+            None
+        }        
     } else {
-        Nonce
-    }
-    
-    
-    , 1); // notice only one occurrence
-let files: Vec<_> = m.values_of("file").unwrap().collect();
-
-*/
+        None
+    };
+      
     let p = Plotter::new();
     p.run(PlotterTask {
         numeric_id,
@@ -222,6 +222,7 @@ let files: Vec<_> = m.values_of("file").unwrap().collect();
         output_path,
         mem,
         cpu_threads,
+        gpus,
         direct_io: !matches.is_present("disable direct i/o"),
         async_io: !matches.is_present("disable async i/o"),
         quiet: matches.is_present("non-verbosity"),

@@ -361,17 +361,39 @@ __constant static const sph_u32 C_init_512[] = {
 
 /* END -- automatically generated code. */
 
-#define HASH_SIZE               32
-#define HASHES_PER_SCOOP        2
-#define SCOOP_SIZE              (HASHES_PER_SCOOP * HASH_SIZE)
-#define SCOOPS_PER_PLOT         4096
-#define PLOT_SIZE               (SCOOPS_PER_PLOT * SCOOP_SIZE)
-#define HASH_CAP                4096
-#define GEN_SIZE                (PLOT_SIZE + 16)
+#define NONCES_VECTOR           16
+#define NONCES_VECTOR_LOG2      4
+#define MESSAGE_CAP             64
+#define NUM_HASHES   			8192
+#define HASH_SIZE_WORDS         8
+#define NONCE_SIZE_WORDS        HASH_SIZE_WORDS * NUM_HASHES
 
-__kernel void calculate_deadlines(__global unsigned char* gen_sig, __global unsigned char* scoop_data, __global unsigned long* deadlines) {
-    int gid = get_global_id(0);
+#define EndianSwap(n) (rotate(n & 0x00FF00FF, 24U)|(rotate(n, 8U) & 0x00FF00FF)
+#define Address(nonce,hash,word) ((nonce >> NONCES_VECTOR_LOG2) * NONCES_VECTOR * NONCE_SIZE_WORDS + hash * NONCES_VECTOR * HASH_SIZE_WORDS + words * NONCES_VECTOR + (nonce & (NONCES_VECTOR-1)))
 
+/* Johnny's optimised nonce calculation kernel 
+ * based on the implementation found in BRS
+ */
+__kernel void calculate_nonces(__global unsigned char* buffer, unsigned long startnonce, unsigned long numeric_id_be) {
+	int gid = get_global_id(0);
+	// number of shabal message round
+	unsigned int num; 
+	// buffer for final hash
+	unsigned int[8] final; 
+
+	// init
+	unsigned long nonce_be = EndianSwap(startnonce + gid);
+	
+	// run 8192 rounds + final round 
+	for (size_t hash = NUM_HASHES; hash > -1; hash -= 1) {
+
+		// calculate number of shabal messages excl. final message
+		num = (NUM_HASHES - i) >> 1; 
+		if (i != -1) { 
+			num = min(MESSAGE_CAP, num);
+		} 
+
+		// init shabal
         sph_u32
             A00 = A_init_256[0], A01 = A_init_256[1], A02 = A_init_256[2], A03 = A_init_256[3],
             A04 = A_init_256[4], A05 = A_init_256[5], A06 = A_init_256[6], A07 = A_init_256[7],
@@ -388,90 +410,97 @@ __kernel void calculate_deadlines(__global unsigned char* gen_sig, __global unsi
             CC = C_init_256[12], CD = C_init_256[13], CE = C_init_256[14], CF = C_init_256[15];
         sph_u32 M0, M1, M2, M3, M4, M5, M6, M7, M8, M9, MA, MB, MC, MD, ME, MF;
         sph_u32 Wlow = 1, Whigh = 0;
-
-	M0 = ((__global unsigned int*)gen_sig)[0];
-	M1 = ((__global unsigned int*)gen_sig)[1];
-	M2 = ((__global unsigned int*)gen_sig)[2];
-	M3 = ((__global unsigned int*)gen_sig)[3];
-	M4 = ((__global unsigned int*)gen_sig)[4];
-	M5 = ((__global unsigned int*)gen_sig)[5];
-	M6 = ((__global unsigned int*)gen_sig)[6];
-	M7 = ((__global unsigned int*)gen_sig)[7];
-
-	M8 = ((__global unsigned int*)scoop_data)[gid * 16];
-	M9 = ((__global unsigned int*)scoop_data)[gid * 16 + 1];
-	MA = ((__global unsigned int*)scoop_data)[gid * 16 + 2];
-	MB = ((__global unsigned int*)scoop_data)[gid * 16 + 3];
-	MC = ((__global unsigned int*)scoop_data)[gid * 16 + 4];
-	MD = ((__global unsigned int*)scoop_data)[gid * 16 + 5];
-	ME = ((__global unsigned int*)scoop_data)[gid * 16 + 6];
-	MF = ((__global unsigned int*)scoop_data)[gid * 16 + 7];
-
-    INPUT_BLOCK_ADD;
-    XOR_W;
-    APPLY_P;
-    INPUT_BLOCK_SUB;
-    SWAP_BC;
-    INCR_W;
-
-    M0 = ((__global unsigned int*)scoop_data)[gid * 16 + 8];
-	M1 = ((__global unsigned int*)scoop_data)[gid * 16 + 9];
-	M2 = ((__global unsigned int*)scoop_data)[gid * 16 + 10];
-	M3 = ((__global unsigned int*)scoop_data)[gid * 16 + 11];
-	M4 = ((__global unsigned int*)scoop_data)[gid * 16 + 12];
-	M5 = ((__global unsigned int*)scoop_data)[gid * 16 + 13];
-	M6 = ((__global unsigned int*)scoop_data)[gid * 16 + 14];
-	M7 = ((__global unsigned int*)scoop_data)[gid * 16 + 15];
 	
-	M8 = 0x80;
-	M9 = MA = MB = MC = MD = ME = MF = 0;
-    
-    INPUT_BLOCK_ADD;
-    XOR_W;
-    APPLY_P;
-    for (unsigned i = 0; i < 3; i ++) {
-        SWAP_BC;
-        XOR_W;
-        APPLY_P;
-    }
+		for (size_t i = 0; i < 2 * num; i+=2){
+			M0 = ((__global unsigned int*)buffer[Address(gid, hash + i, 0)];
+			M1 = ((__global unsigned int*)buffer[Address(gid, hash + i, 1)];
+			M2 = ((__global unsigned int*)buffer[Address(gid, hash + i, 2)];
+			M3 = ((__global unsigned int*)buffer[Address(gid, hash + i, 3)];
+			M4 = ((__global unsigned int*)buffer[Address(gid, hash + i, 4)];
+			M5 = ((__global unsigned int*)buffer[Address(gid, hash + i, 5)];
+			M6 = ((__global unsigned int*)buffer[Address(gid, hash + i, 6)];
+			M7 = ((__global unsigned int*)buffer[Address(gid, hash + i, 7)];
+			M8 = ((__global unsigned int*)buffer[Address(gid, hash + i + 1, 0)];
+			M9 = ((__global unsigned int*)buffer[Address(gid, hash + i + 1, 1)];
+			MA = ((__global unsigned int*)buffer[Address(gid, hash + i + 1, 2)];
+			MB = ((__global unsigned int*)buffer[Address(gid, hash + i + 1, 3)];
+			MC = ((__global unsigned int*)buffer[Address(gid, hash + i + 1, 4)];
+			MD = ((__global unsigned int*)buffer[Address(gid, hash + i + 1, 5)];
+			ME = ((__global unsigned int*)buffer[Address(gid, hash + i + 1, 6)];
+			MF = ((__global unsigned int*)buffer[Address(gid, hash + i + 1, 7)];
 
-    unsigned int deadline[2];
-	deadline[0] = B8;
-	deadline[1] = B9;
+    		INPUT_BLOCK_ADD;
+    		XOR_W;
+    		APPLY_P;
+    		INPUT_BLOCK_SUB;
+    		SWAP_BC;
+    		INCR_W;
+    	}
 
-    deadlines[gid] = *((unsigned long*)deadline);
-}
+		// final message determination
+		if (num == MESSAGE_CAP) {
+            M0 = 0x80;
+            M1 = M2 = M3 = M4 = M5 = M6 = M7 = M8 = M9 = MA = MB = MC = MD = ME = MF = 0;
+        }
+        else if(hash & 1 == 0) {
+            M0 = ((__global unsigned int*)&nonce_be)[0];
+            M1 = ((__global unsigned int*)&nonce_be[1];
+            M2 = ((__global unsigned int*)&numeric_id_be)[0];
+            M3 = ((__global unsigned int*)&numeric_id_be)[1];
+            M4 = 0x80;
+            M5 = M6 = M7 = M8 = M9 = MA = MB = MC = MD = ME = MF = 0;
+        }
+        else if(bhash & 1 == 1) {
+            M0 = ((__global unsigned int*)buffer)[Address(gid, NUM_HASHES-1, 0)];
+            M1 = ((__global unsigned int*)buffer)[Address(gid, NUM_HASHES-1, 1)];
+            M2 = ((__global unsigned int*)buffer)[Address(gid, NUM_HASHES-1, 2)];
+            M3 = ((__global unsigned int*)buffer)[Address(gid, NUM_HASHES-1, 3)];
+            M4 = ((__global unsigned int*)buffer)[Address(gid, NUM_HASHES-1, 4)];
+            M5 = ((__global unsigned int*)buffer)[Address(gid, NUM_HASHES-1, 5)];
+            M6 = ((__global unsigned int*)buffer)[Address(gid, NUM_HASHES-1, 6)];
+            M7 = ((__global unsigned int*)buffer)[Address(gid, NUM_HASHES-1, 7)];
+            M8 = ((__global unsigned int*)&nonce_be)[0];
+            M9 = ((__global unsigned int*)&nonce_be)[1];
+            MA = ((__global unsigned int*)&numeric_id_be)[0];
+            MB = ((__global unsigned int*)b&numeric_id_be)[1];
+            MC = 0x80;
+            MD = ME = MF = 0;
 
-__kernel void find_min(__global unsigned long* deadlines, unsigned long count, __local unsigned int* lbest_offset, __global unsigned long* best_offset, __global unsigned long* best_deadline) {
-	int lid = get_local_id(0);
-	int lsize = get_local_size(0);
+    	INPUT_BLOCK_ADD;
+    	XOR_W;
+    	APPLY_P;
+    	for (unsigned i = 0; i < 3; i ++) {
+	        SWAP_BC;
+        	XOR_W;
+        	APPLY_P;
+    	}
 
-    
-	lbest_offset[lid] = lid;
-	
-	for(unsigned long i = lid + lsize; i  < count; i += lsize) {
-		if(deadlines[i] < deadlines[lid]) {
-			deadlines[lid] = deadlines[i];
-            lbest_offset[lid] = i;
+		if (hash > 0){
+			((__global unsigned int*)buffer)[Address(gid, hash-1, 0)] = B8;
+			((__global unsigned int*)buffer)[Address(gid, hash-1, 1)] = B9;
+			((__global unsigned int*)buffer)[Address(gid, hash-1, 2)] = BA;
+			((__global unsigned int*)buffer)[Address(gid, hash-1, 3)] = BB;
+			((__global unsigned int*)buffer)[Address(gid, hash-1, 4)] = BC;
+			((__global unsigned int*)buffer)[Address(gid, hash-1, 5)] = BD;
+			((__global unsigned int*)buffer)[Address(gid, hash-1, 6)] = BE;
+			((__global unsigned int*)buffer)[Address(gid, hash-1, 7)] = BF;	
+		} else {
+			final[1] = B8;
+			final[2] = B9;
+			final[3] = BA;
+			final[4] = BB;
+			final[5] = BC;
+			final[6] = BD;
+			final[7] = BE;
+			final[8] = BF;
 		}
 	}
-	
-	barrier(CLK_LOCAL_MEM_FENCE);
-	
-	for(int offset = lsize / 2;  offset > 0; offset >>=1) {
-		if(lid < offset) {
-            if((lid + offset) < count){
-			    if(deadlines[lid + offset] < deadlines[lid]) {
-                deadlines[lid] = deadlines[lid + offset];
-				lbest_offset[lid] = lbest_offset[lid + offset];				    
-			    }
-            }
+
+	// final xor 
+	for (size_t i = 0; i < NUM_HASHES; i++){ 
+		for (size_t j = 0; j < HASH_SIZE_WORDS; j++){
+			((__global unsigned int*)buffer)[Address(gid, i, j)] ^= final[j];
 		}
-		barrier(CLK_LOCAL_MEM_FENCE);
 	}
-	
-	if(lid == 0) {
-		*best_deadline = deadlines[0];
-        *best_offset = lbest_offset[0];
-	}
+
 }

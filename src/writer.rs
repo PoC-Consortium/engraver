@@ -92,7 +92,7 @@ pub fn create_writer_task(
     }
 }
 
-pub fn read_resume_info(file: &Path) -> Result<u64,u64> {
+pub fn read_resume_info(file: &Path) -> Result<u64, u64> {
     let mut file = open_r(&file).unwrap();
     file.seek(SeekFrom::End(-8)).unwrap();
 

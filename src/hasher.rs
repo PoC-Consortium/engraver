@@ -7,6 +7,8 @@ use plotter::{Buffer, PlotterTask};
 use std::cmp::min;
 use std::sync::mpsc::{channel, Sender};
 use std::sync::Arc;
+#[cfg(feature = "opencl")]
+use ocl::noncegen_gpu;
 
 const TASK_SIZE: u64 = 64;
 const NONCE_SIZE: u64 = (2 << 17);
@@ -118,6 +120,23 @@ pub fn hash(tx: Sender<u64>, hasher_task: HasherTaskInfo, simd_ext: String) -> i
     }
 }
 
+// currently a thread, will be changed to async task
+#[cfg(feature = "opencl")]
+pub fn hash_gpu(tx: Sender<u64>, hasher_task: HasherTaskInfo, gpu_num: u8) -> impl FnOnce() {
+    move || {
+        noncegen_gpu(
+            hasher_task.cache.ptr,
+            hasher_task.cache_size,
+            hasher_task.chunk_offset,
+            hasher_task.numeric_id,
+            hasher_task.local_startnonce,
+            hasher_task.local_nonces,
+        );
+        tx.send(hasher_task.local_nonces)
+            .expect("Pool task can't communicate with hasher thread.");
+    }
+}
+
 pub fn create_hasher_task(
     task: Arc<PlotterTask>,
     thread_pool: rayon::ThreadPool,
@@ -170,7 +189,9 @@ pub fn create_hasher_task(
                         cache_size: buffer_size / NONCE_SIZE as size_t,
                         chunk_offset: nonces_to_hash / TASK_SIZE * TASK_SIZE as size_t,
                         numeric_id: task.numeric_id,
-                        local_startnonce: task.start_nonce + nonces_hashed + nonces_to_hash / TASK_SIZE * TASK_SIZE,
+                        local_startnonce: task.start_nonce
+                            + nonces_hashed
+                            + nonces_to_hash / TASK_SIZE * TASK_SIZE,
                         local_nonces: nonces_to_hash % TASK_SIZE,
                     },
                     simd_ext.clone(),
