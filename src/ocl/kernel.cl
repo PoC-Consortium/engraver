@@ -368,7 +368,15 @@ __constant static const sph_u32 C_init_512[] = {
 #define HASH_SIZE_WORDS         8
 #define NONCE_SIZE_WORDS        HASH_SIZE_WORDS * NUM_HASHES
 
-#define EndianSwap(n) (rotate(n & 0x00FF00FF, 24U)|(rotate(n, 8U) & 0x00FF00FF)
+#define EndianSwap(n) (rotate(n & 0x00FF00FF, 24UL)|(rotate(n, 8UL) & 0x00FF00FF))
+
+#define EndianSwap64(n)	bitselect( \
+		bitselect(rotate(n, 24UL), \
+		          rotate(n, 8UL), 0x000000FF000000FFUL), \
+		bitselect(rotate(n, 56UL), \
+		          rotate(n, 40UL), 0x00FF000000FF0000UL), \
+		0xFFFF0000FFFF0000UL)
+
 #define Address(nonce,hash,word) ((nonce >> NONCES_VECTOR_LOG2) * NONCES_VECTOR * NONCE_SIZE_WORDS + hash * NONCES_VECTOR * HASH_SIZE_WORDS + word * NONCES_VECTOR + (nonce & (NONCES_VECTOR-1)))
 
 /* Johnny's optimised nonce calculation kernel 
@@ -382,7 +390,7 @@ __kernel void calculate_nonces(__global unsigned char* buffer, unsigned long sta
 	unsigned int final[8]; 
 
 	// init
-	unsigned long nonce_be = EndianSwap(startnonce + gid);
+	unsigned long nonce_be = EndianSwap64(startnonce + gid);
 	
 	// run 8192 rounds + final round 
 	for (size_t hash = NUM_HASHES; hash > -1; hash -= 1) {
