@@ -369,7 +369,7 @@ __constant static const sph_u32 C_init_512[] = {
 #define NONCE_SIZE_WORDS        HASH_SIZE_WORDS * NUM_HASHES
 
 #define EndianSwap(n) (rotate(n & 0x00FF00FF, 24U)|(rotate(n, 8U) & 0x00FF00FF)
-#define Address(nonce,hash,word) ((nonce >> NONCES_VECTOR_LOG2) * NONCES_VECTOR * NONCE_SIZE_WORDS + hash * NONCES_VECTOR * HASH_SIZE_WORDS + words * NONCES_VECTOR + (nonce & (NONCES_VECTOR-1)))
+#define Address(nonce,hash,word) ((nonce >> NONCES_VECTOR_LOG2) * NONCES_VECTOR * NONCE_SIZE_WORDS + hash * NONCES_VECTOR * HASH_SIZE_WORDS + word * NONCES_VECTOR + (nonce & (NONCES_VECTOR-1)))
 
 /* Johnny's optimised nonce calculation kernel 
  * based on the implementation found in BRS
@@ -379,7 +379,7 @@ __kernel void calculate_nonces(__global unsigned char* buffer, unsigned long sta
 	// number of shabal message round
 	unsigned int num; 
 	// buffer for final hash
-	unsigned int[8] final; 
+	unsigned int final[8]; 
 
 	// init
 	unsigned long nonce_be = EndianSwap(startnonce + gid);
@@ -388,9 +388,9 @@ __kernel void calculate_nonces(__global unsigned char* buffer, unsigned long sta
 	for (size_t hash = NUM_HASHES; hash > -1; hash -= 1) {
 
 		// calculate number of shabal messages excl. final message
-		num = (NUM_HASHES - i) >> 1; 
-		if (i != -1) { 
-			num = min(MESSAGE_CAP, num);
+		num = (NUM_HASHES - hash) >> 1; 
+		if (hash != -1) { 
+			num = (num > MESSAGE_CAP) ? MESSAGE_CAP : num;
 		} 
 
 		// init shabal
@@ -412,22 +412,22 @@ __kernel void calculate_nonces(__global unsigned char* buffer, unsigned long sta
         sph_u32 Wlow = 1, Whigh = 0;
 	
 		for (size_t i = 0; i < 2 * num; i+=2){
-			M0 = ((__global unsigned int*)buffer[Address(gid, hash + i, 0)];
-			M1 = ((__global unsigned int*)buffer[Address(gid, hash + i, 1)];
-			M2 = ((__global unsigned int*)buffer[Address(gid, hash + i, 2)];
-			M3 = ((__global unsigned int*)buffer[Address(gid, hash + i, 3)];
-			M4 = ((__global unsigned int*)buffer[Address(gid, hash + i, 4)];
-			M5 = ((__global unsigned int*)buffer[Address(gid, hash + i, 5)];
-			M6 = ((__global unsigned int*)buffer[Address(gid, hash + i, 6)];
-			M7 = ((__global unsigned int*)buffer[Address(gid, hash + i, 7)];
-			M8 = ((__global unsigned int*)buffer[Address(gid, hash + i + 1, 0)];
-			M9 = ((__global unsigned int*)buffer[Address(gid, hash + i + 1, 1)];
-			MA = ((__global unsigned int*)buffer[Address(gid, hash + i + 1, 2)];
-			MB = ((__global unsigned int*)buffer[Address(gid, hash + i + 1, 3)];
-			MC = ((__global unsigned int*)buffer[Address(gid, hash + i + 1, 4)];
-			MD = ((__global unsigned int*)buffer[Address(gid, hash + i + 1, 5)];
-			ME = ((__global unsigned int*)buffer[Address(gid, hash + i + 1, 6)];
-			MF = ((__global unsigned int*)buffer[Address(gid, hash + i + 1, 7)];
+			M0 = ((__global unsigned int*)buffer)[Address(gid, hash + i, 0)];
+			M1 = ((__global unsigned int*)buffer)[Address(gid, hash + i, 1)];
+			M2 = ((__global unsigned int*)buffer)[Address(gid, hash + i, 2)];
+			M3 = ((__global unsigned int*)buffer)[Address(gid, hash + i, 3)];
+			M4 = ((__global unsigned int*)buffer)[Address(gid, hash + i, 4)];
+			M5 = ((__global unsigned int*)buffer)[Address(gid, hash + i, 5)];
+			M6 = ((__global unsigned int*)buffer)[Address(gid, hash + i, 6)];
+			M7 = ((__global unsigned int*)buffer)[Address(gid, hash + i, 7)];
+			M8 = ((__global unsigned int*)buffer)[Address(gid, hash + i + 1, 0)];
+			M9 = ((__global unsigned int*)buffer)[Address(gid, hash + i + 1, 1)];
+			MA = ((__global unsigned int*)buffer)[Address(gid, hash + i + 1, 2)];
+			MB = ((__global unsigned int*)buffer)[Address(gid, hash + i + 1, 3)];
+			MC = ((__global unsigned int*)buffer)[Address(gid, hash + i + 1, 4)];
+			MD = ((__global unsigned int*)buffer)[Address(gid, hash + i + 1, 5)];
+			ME = ((__global unsigned int*)buffer)[Address(gid, hash + i + 1, 6)];
+			MF = ((__global unsigned int*)buffer)[Address(gid, hash + i + 1, 7)];
 
     		INPUT_BLOCK_ADD;
     		XOR_W;
@@ -442,15 +442,15 @@ __kernel void calculate_nonces(__global unsigned char* buffer, unsigned long sta
             M0 = 0x80;
             M1 = M2 = M3 = M4 = M5 = M6 = M7 = M8 = M9 = MA = MB = MC = MD = ME = MF = 0;
         }
-        else if(hash & 1 == 0) {
-            M0 = ((__global unsigned int*)&nonce_be)[0];
-            M1 = ((__global unsigned int*)&nonce_be[1];
-            M2 = ((__global unsigned int*)&numeric_id_be)[0];
-            M3 = ((__global unsigned int*)&numeric_id_be)[1];
+        else if((hash & 1) == 0) {
+            M0 = ((unsigned int*)&nonce_be)[0];
+            M1 = ((unsigned int*)&nonce_be)[1];
+            M2 = ((unsigned int*)&numeric_id_be)[0];
+            M3 = ((unsigned int*)&numeric_id_be)[1];
             M4 = 0x80;
             M5 = M6 = M7 = M8 = M9 = MA = MB = MC = MD = ME = MF = 0;
         }
-        else if(bhash & 1 == 1) {
+        else if((hash & 1) == 1) {
             M0 = ((__global unsigned int*)buffer)[Address(gid, NUM_HASHES-1, 0)];
             M1 = ((__global unsigned int*)buffer)[Address(gid, NUM_HASHES-1, 1)];
             M2 = ((__global unsigned int*)buffer)[Address(gid, NUM_HASHES-1, 2)];
@@ -459,12 +459,13 @@ __kernel void calculate_nonces(__global unsigned char* buffer, unsigned long sta
             M5 = ((__global unsigned int*)buffer)[Address(gid, NUM_HASHES-1, 5)];
             M6 = ((__global unsigned int*)buffer)[Address(gid, NUM_HASHES-1, 6)];
             M7 = ((__global unsigned int*)buffer)[Address(gid, NUM_HASHES-1, 7)];
-            M8 = ((__global unsigned int*)&nonce_be)[0];
-            M9 = ((__global unsigned int*)&nonce_be)[1];
-            MA = ((__global unsigned int*)&numeric_id_be)[0];
-            MB = ((__global unsigned int*)b&numeric_id_be)[1];
+            M8 = ((unsigned int*)&nonce_be)[0];
+            M9 = ((unsigned int*)&nonce_be)[1];
+            MA = ((unsigned int*)&numeric_id_be)[0];
+            MB = ((unsigned int*)&numeric_id_be)[1];
             MC = 0x80;
             MD = ME = MF = 0;
+		}
 
     	INPUT_BLOCK_ADD;
     	XOR_W;
@@ -485,14 +486,14 @@ __kernel void calculate_nonces(__global unsigned char* buffer, unsigned long sta
 			((__global unsigned int*)buffer)[Address(gid, hash-1, 6)] = BE;
 			((__global unsigned int*)buffer)[Address(gid, hash-1, 7)] = BF;	
 		} else {
-			final[1] = B8;
-			final[2] = B9;
-			final[3] = BA;
-			final[4] = BB;
-			final[5] = BC;
-			final[6] = BD;
-			final[7] = BE;
-			final[8] = BF;
+			final[0] = B8;
+			final[1] = B9;
+			final[2] = BA;
+			final[3] = BB;
+			final[4] = BC;
+			final[5] = BD;
+			final[6] = BE;
+			final[7] = BF;
 		}
 	}
 

@@ -184,7 +184,7 @@ fn main() {
         ocl::platform_info();
         return;
     }
-    
+
     // plotting
     /* subcommand
     if let Some(matches) = matches.subcommand_matches("plot") {
@@ -202,18 +202,18 @@ fn main() {
     let mem = value_t!(matches, "memory", String).unwrap_or_else(|_| "0B".to_owned());
     let cpu_threads =
         value_t!(matches, "cpu", u8).unwrap_or_else(|_| sys_info::cpu_num().unwrap() as u8);
-    
+
     let gpus = if matches.occurrences_of("gpu") > 0 {
         let gpu = values_t!(matches, "gpu", String).unwrap_or(Vec::new());
         if gpu.len() > 0 {
             Some(gpu)
         } else {
             None
-        }        
+        }
     } else {
         None
     };
-      
+
     let p = Plotter::new();
     p.run(PlotterTask {
         numeric_id,

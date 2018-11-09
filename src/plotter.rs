@@ -10,6 +10,8 @@ use self::raw_cpuid::CpuId;
 use chan;
 use core_affinity;
 use hasher::create_hasher_task;
+#[cfg(feature = "opencl")]
+use ocl::gpu_info;
 use std::cmp::{max, min};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
@@ -21,8 +23,6 @@ use utils::preallocate;
 #[cfg(windows)]
 use utils::set_thread_ideal_processor;
 use writer::{create_writer_task, read_resume_info, write_resume_info};
-#[cfg(feature = "opencl")]
-use ocl::gpu_info;
 
 const NONCE_SIZE: u64 = (2 << 17);
 const SCOOP_SIZE: u64 = 64;
@@ -95,7 +95,6 @@ impl Plotter {
         };
 
         if !task.quiet {
-
             println!(
                 "CPU: {} [using {} of {} cores{}{}]",
                 cpu_name,
@@ -109,10 +108,9 @@ impl Plotter {
         if !task.quiet {
             #[cfg(feature = "opencl")]
             match &task.gpus {
-            Some(x) => {
-                gpu_info(&x)},
-            None => (),
-            };            
+                Some(x) => gpu_info(&x),
+                None => (),
+            };
         }
 
         let file = Path::new(&task.output_path).join(format!(

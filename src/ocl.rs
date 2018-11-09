@@ -17,6 +17,8 @@ use std::process;
 use std::sync::{Arc, Mutex};
 use std::u64;
 
+const NONCE_SIZE: u64 = (2 << 17);
+
 static SRC: &'static str = include_str!("ocl/kernel.cl");
 
 // convert the info or error to a string for printing:
@@ -54,11 +56,11 @@ pub fn platform_info() {
 }
 
 pub fn gpu_info(gpus: &Vec<String>) {
-    for gpu in gpus.iter(){
+    for gpu in gpus.iter() {
         let gpu = gpu.split(":").collect::<Vec<&str>>();
         let platform_id = gpu[0].parse::<usize>().unwrap();
         let gpu_id = gpu[1].parse::<usize>().unwrap();
-        
+
         let platform_ids = core::get_platform_ids().unwrap();
         if platform_id >= platform_ids.len() {
             println!("Error: Selected OpenCL platform doesn't exist.");
@@ -81,7 +83,7 @@ pub fn gpu_info(gpus: &Vec<String>) {
                     to_string!(core::get_device_info(&device, DeviceInfo::Name)),
                     mem / 1024 / 1024,
                     to_string!(core::get_device_info(&device, DeviceInfo::MaxComputeUnits))
-                );               
+                );
             }
             _ => panic!("Unexpected error. Can't obtain GPU memory size."),
         }
@@ -92,11 +94,8 @@ pub struct GpuContext {
     context: core::Context,
     queue: core::CommandQueue,
     kernel1: core::Kernel,
-    kernel2: core::Kernel,
     ldim1: [usize; 3],
     gdim1: [usize; 3],
-    ldim2: [usize; 3],
-    gdim2: [usize; 3],
     mapping: bool,
 }
 
@@ -236,11 +235,9 @@ impl GpuContext {
             None,
         ).unwrap();
         let queue = core::create_command_queue(&context, &device_id, None).unwrap();
-        let kernel1 = core::create_kernel(&program, "calculate_deadlines").unwrap();
-        let kernel2 = core::create_kernel(&program, "find_min").unwrap();
+        let kernel1 = core::create_kernel(&program, "calculate_nonces").unwrap();
 
         let kernel1_workgroup_size = get_kernel_work_group_size(&kernel1, device_id);
-        let kernel2_workgroup_size = get_kernel_work_group_size(&kernel2, device_id);
 
         let mut workgroup_count = nonces_per_cache / kernel1_workgroup_size;
         if nonces_per_cache % kernel1_workgroup_size != 0 {
@@ -249,18 +246,13 @@ impl GpuContext {
 
         let gdim1 = [kernel1_workgroup_size * workgroup_count, 1, 1];
         let ldim1 = [kernel1_workgroup_size, 1, 1];
-        let gdim2 = [kernel2_workgroup_size, 1, 1];
-        let ldim2 = [kernel2_workgroup_size, 1, 1];
 
         GpuContext {
             context,
             queue,
             kernel1,
-            kernel2,
             ldim1,
             gdim1,
-            ldim2,
-            gdim2,
             mapping,
         }
     }
@@ -274,10 +266,35 @@ pub fn noncegen_gpu(
     local_startnonce: uint64_t,
     local_nonces: uint64_t,
 ) {
+    // to be changed!
+
+    // unsafe {
+    //  let data = Vec::from_raw_parts(cache as *mut Vec<u8>, (cache_size * NONCE_SIZE) as  usize, (cache_size * NONCE_SIZE) as usize);
+    // }
+
+    let gpu_context = GpuContext::new(0, 0, 1024, false);
     return;
-    /*
-    let data = buffer.data.clone();
-    let data2 = (*data).lock().unwrap();
+    /*   
+    core::set_kernel_arg(&gpu_context.kernel1, 0, ArgVal::mem(&buffer.gensig_gpu)).unwrap();
+    core::set_kernel_arg(&gpu_context.kernel1, 1, ArgVal::mem(&buffer.data_gpu)).unwrap();
+    core::set_kernel_arg(&gpu_context.kernel1, 2, ArgVal::mem(&buffer.deadlines_gpu)).unwrap();
+
+    unsafe {
+        core::enqueue_kernel(
+            &gpu_context.queue,
+            &gpu_context.kernel1,
+            1,
+            None,
+            &gpu_context.gdim1,
+            Some(gpu_context.ldim1),
+            None::<Event>,
+            None::<&mut Event>,
+        ).unwrap();
+    }
+
+ return;
+    */
+    /*    
     let gpu_context_mtx = (*buffer).get_gpu_context().unwrap();
     let gpu_context = gpu_context_mtx.lock().unwrap();
 
@@ -296,7 +313,7 @@ pub fn noncegen_gpu(
     if gpu_context.mapping {
         let temp = buffer.memmap.clone();
         let temp2 = temp.unwrap();
-        core::enqueue_unmap_mem_object(
+        core::  (
             &gpu_context.queue,
             &buffer.data_gpu,
             &*temp2,

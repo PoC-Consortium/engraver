@@ -3,14 +3,15 @@ extern crate rayon;
 
 use chan;
 use libc::{c_void, size_t, uint64_t};
+#[cfg(feature = "opencl")]
+use ocl::noncegen_gpu;
 use plotter::{Buffer, PlotterTask};
 use std::cmp::min;
 use std::sync::mpsc::{channel, Sender};
 use std::sync::Arc;
-#[cfg(feature = "opencl")]
-use ocl::noncegen_gpu;
 
-const TASK_SIZE: u64 = 64;
+const CPU_TASK_SIZE: u64 = 64;
+const GPU_TASK_SIZE: u64 = 1024;
 const NONCE_SIZE: u64 = (2 << 17);
 
 extern "C" {
@@ -153,48 +154,50 @@ pub fn create_hasher_task(
             let buffer_size = (*bs).len() as u64;
             let nonces_to_hash = min(buffer_size / NONCE_SIZE, task.nonces - nonces_hashed);
 
-            let mut n_jobs = nonces_to_hash as usize / TASK_SIZE as usize;
-            if nonces_to_hash % TASK_SIZE > 0 {
+            let mut n_jobs = nonces_to_hash as usize / GPU_TASK_SIZE as usize;
+            if nonces_to_hash % GPU_TASK_SIZE > 0 {
                 n_jobs += 1;
             }
             let (tx, rx) = channel();
 
-            for j in 0..nonces_to_hash / TASK_SIZE {
-                let task = hash(
+            for j in 0..nonces_to_hash / GPU_TASK_SIZE {
+                let task = hash_gpu(
                     tx.clone(),
                     HasherTaskInfo {
                         cache: SafeCVoid {
                             ptr: bs.as_ptr() as *mut c_void,
                         },
                         cache_size: buffer_size / NONCE_SIZE as size_t,
-                        chunk_offset: j * TASK_SIZE as size_t,
+                        chunk_offset: j * GPU_TASK_SIZE as size_t,
                         numeric_id: task.numeric_id,
-                        local_startnonce: task.start_nonce + nonces_hashed + j * TASK_SIZE,
-                        local_nonces: TASK_SIZE,
+                        local_startnonce: task.start_nonce + nonces_hashed + j * GPU_TASK_SIZE,
+                        local_nonces: GPU_TASK_SIZE,
                     },
-                    simd_ext.clone(),
+                    0u8
+                    //simd_ext.clone(),
                 );
 
                 thread_pool.spawn(task);
             }
 
             // hash remainder
-            if nonces_to_hash % TASK_SIZE > 0 {
-                let task = hash(
+            if nonces_to_hash % GPU_TASK_SIZE > 0 {
+                let task = hash_gpu(
                     tx.clone(),
                     HasherTaskInfo {
                         cache: SafeCVoid {
                             ptr: bs.as_ptr() as *mut c_void,
                         },
                         cache_size: buffer_size / NONCE_SIZE as size_t,
-                        chunk_offset: nonces_to_hash / TASK_SIZE * TASK_SIZE as size_t,
+                        chunk_offset: nonces_to_hash / GPU_TASK_SIZE * GPU_TASK_SIZE as size_t,
                         numeric_id: task.numeric_id,
                         local_startnonce: task.start_nonce
                             + nonces_hashed
-                            + nonces_to_hash / TASK_SIZE * TASK_SIZE,
-                        local_nonces: nonces_to_hash % TASK_SIZE,
+                            + nonces_to_hash / GPU_TASK_SIZE * GPU_TASK_SIZE,
+                        local_nonces: nonces_to_hash % GPU_TASK_SIZE,
                     },
-                    simd_ext.clone(),
+                    0u8
+                    //simd_ext.clone(),
                 );
                 thread_pool.spawn(task);
             }
