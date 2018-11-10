@@ -378,23 +378,22 @@ __constant static const sph_u32 C_init_512[] = {
 		0xFFFF0000FFFF0000UL)
 
 #define Address(nonce,hash,word) ((nonce >> NONCES_VECTOR_LOG2) * NONCES_VECTOR * NONCE_SIZE_WORDS + hash * NONCES_VECTOR * HASH_SIZE_WORDS + word * NONCES_VECTOR + (nonce & (NONCES_VECTOR-1)))
+//#define Address(nonce,hash,word) (nonce * NONCE_SIZE_WORDS + hash * HASH_SIZE_WORDS + word)
 
 /* Johnny's optimised nonce calculation kernel 
  * based on the implementation found in BRS
  */
-__kernel void calculate_nonces(__global unsigned char* buffer, unsigned long startnonce, unsigned long numeric_id_be) {
+__kernel void calculate_nonces(__global unsigned char* buffer, unsigned long startnonce, unsigned long numeric_id_be, int start, int end) {
+	//if (gid==0) {printf("\n\nOCL 2 %lu\n\n",startnonce);} DEBUG
 	int gid = get_global_id(0);
 	// number of shabal message round
 	unsigned int num; 
 	// buffer for final hash
 	unsigned int final[8]; 
-
 	// init
 	unsigned long nonce_be = EndianSwap64(startnonce + gid);
-	
 	// run 8192 rounds + final round 
-	for (size_t hash = NUM_HASHES; hash > -1; hash -= 1) {
-
+	for (int hash = NUM_HASHES - start; hash > -1 + NUM_HASHES - end; hash -= 1) {
 		// calculate number of shabal messages excl. final message
 		num = (NUM_HASHES - hash) >> 1; 
 		if (hash != -1) { 
@@ -506,10 +505,11 @@ __kernel void calculate_nonces(__global unsigned char* buffer, unsigned long sta
 	}
 
 	// final xor 
-	for (size_t i = 0; i < NUM_HASHES; i++){ 
-		for (size_t j = 0; j < HASH_SIZE_WORDS; j++){
-			((__global unsigned int*)buffer)[Address(gid, i, j)] ^= final[j];
+	if(end==8192){
+		for (size_t i = 0; i < NUM_HASHES; i++){ 
+			for (size_t j = 0; j < HASH_SIZE_WORDS; j++){
+				((__global unsigned int*)buffer)[Address(gid, i, j)] ^= final[j];
+			}
 		}
 	}
-
 }

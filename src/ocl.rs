@@ -9,15 +9,17 @@ use hasher::SafeCVoid;
 use libc::{c_void, size_t, uint64_t};
 use std::sync::mpsc::{channel, Sender};
 
+const NONCE_SIZE: u64 = (2 << 17);
+
 //use config::Cfg;
 use plotter::Buffer;
 use std::ffi::CString;
 
+use std::mem::transmute;
 use std::process;
+use std::slice::from_raw_parts;
 use std::sync::{Arc, Mutex};
 use std::u64;
-
-const NONCE_SIZE: u64 = (2 << 17);
 
 static SRC: &'static str = include_str!("ocl/kernel.cl");
 
@@ -55,7 +57,22 @@ pub fn platform_info() {
     }
 }
 
-pub fn gpu_info(gpus: &Vec<String>) {
+pub struct GpuContext {
+    context: core::Context,
+    queue: core::CommandQueue,
+    kernel1: core::Kernel,
+    ldim1: [usize; 3],
+    gdim1: [usize; 3],
+    mapping: bool,
+    buffer_host_a: Vec<u8>,
+    //  buffer_host_b: Vec<u8>,
+    buffer_gpu_a: core::Mem,
+    buffer_gpu_b: core::Mem,
+    pub worksize: usize,
+}
+
+pub fn gpu_init(gpus: &Vec<String>, quiet: bool) -> Vec<Arc<GpuContext>> {
+    let mut result = Vec::new();
     for gpu in gpus.iter() {
         let gpu = gpu.split(":").collect::<Vec<&str>>();
         let platform_id = gpu[0].parse::<usize>().unwrap();
@@ -75,30 +92,119 @@ pub fn gpu_info(gpus: &Vec<String>) {
             process::exit(0);
         }
         let device = device_ids[gpu_id];
+        let mut total_mem = 0;
         match core::get_device_info(&device, DeviceInfo::GlobalMemSize).unwrap() {
             core::DeviceInfoResult::GlobalMemSize(mem) => {
-                println!(
-                    "GPU: {} - {} [RAM={}MiB, Cores={}]",
-                    to_string!(core::get_device_info(&device, DeviceInfo::Vendor)),
-                    to_string!(core::get_device_info(&device, DeviceInfo::Name)),
-                    mem / 1024 / 1024,
-                    to_string!(core::get_device_info(&device, DeviceInfo::MaxComputeUnits))
-                );
+                total_mem = mem;
+                if !quiet {
+                    println!(
+                        "GPU: {} - {} [RAM={}MiB, Cores={}]",
+                        to_string!(core::get_device_info(&device, DeviceInfo::Vendor)),
+                        to_string!(core::get_device_info(&device, DeviceInfo::Name)),
+                        mem / 1024 / 1024,
+                        to_string!(core::get_device_info(&device, DeviceInfo::MaxComputeUnits))
+                    );
+                }
             }
             _ => panic!("Unexpected error. Can't obtain GPU memory size."),
         }
+
+        // use max 75% of total gpu mem
+        // todo: user limit
+        let num_buffer = 2;
+        let max_nonces = ((total_mem / 8 * 2) / (num_buffer * NONCE_SIZE)) as usize;
+        result.push(Arc::new(GpuContext::new(
+            platform_id,
+            gpu_id,
+            max_nonces,
+            false,
+        )));
+    }
+    result
+}
+
+// Ohne Gummi im Bahnhofsviertel... das wird noch Konsequenzen haben
+unsafe impl Sync for GpuContext {}
+//unsafe impl Send for GpuBuffer {}
+
+impl GpuContext {
+    pub fn new(
+        gpu_platform: usize,
+        gpu_id: usize,
+        max_nonces_per_cache: usize,
+        mapping: bool,
+    ) -> GpuContext {
+        let platform_ids = core::get_platform_ids().unwrap();
+        let platform_id = platform_ids[gpu_platform];
+        let device_ids = core::get_device_ids(&platform_id, None, None).unwrap();
+        let device_id = device_ids[gpu_id];
+        let context_properties = ContextProperties::new().platform(platform_id);
+        let context =
+            core::create_context(Some(&context_properties), &[device_id], None, None).unwrap();
+        let src_cstring = CString::new(SRC).unwrap();
+        let program = core::create_program_with_source(&context, &[src_cstring]).unwrap();
+        core::build_program(
+            &program,
+            None::<&[()]>,
+            &CString::new("").unwrap(),
+            None,
+            None,
+        ).unwrap();
+        let queue = core::create_command_queue(&context, &device_id, None).unwrap();
+        let kernel1 = core::create_kernel(&program, "calculate_nonces").unwrap();
+
+        let kernel1_workgroup_size = get_kernel_work_group_size(&kernel1, device_id);
+
+        println!("Debug: max_nonces_per_cache={}", max_nonces_per_cache);
+        let mut workgroup_count = max_nonces_per_cache / kernel1_workgroup_size;
+        //if max_nonces_per_cache % kernel1_workgroup_size != 0 {
+        //    workgroup_count += 1;
+        //}
+
+        let worksize = kernel1_workgroup_size * workgroup_count;
+
+        println!("Debug: worksize={}", worksize);
+
+        let gdim1 = [worksize, 1, 1];
+        let ldim1 = [kernel1_workgroup_size, 1, 1];
+
+        // create buffer
+        print!("Creating Buffer...");
+        let buffer_gpu_a = unsafe {
+            core::create_buffer::<_, u8>(
+                &context,
+                core::MEM_READ_WRITE,
+                (NONCE_SIZE as usize) * worksize,
+                None,
+            ).unwrap()
+        };
+        let buffer_gpu_b = unsafe {
+            core::create_buffer::<_, u8>(
+                &context,
+                core::MEM_READ_WRITE,
+                (NONCE_SIZE as usize) * worksize,
+                None,
+            ).unwrap()
+        };
+
+        let buffer_host_a = vec![1u8; (NONCE_SIZE as usize) * worksize as usize];
+
+        println!("OK");
+        GpuContext {
+            context,
+            queue,
+            kernel1,
+            ldim1,
+            gdim1,
+            mapping,
+            buffer_gpu_a,
+            buffer_gpu_b,
+            buffer_host_a: buffer_host_a,
+            worksize,
+        }
     }
 }
-
-pub struct GpuContext {
-    context: core::Context,
-    queue: core::CommandQueue,
-    kernel1: core::Kernel,
-    ldim1: [usize; 3],
-    gdim1: [usize; 3],
-    mapping: bool,
-}
-
+/*
 pub struct GpuBuffer {
     data: Arc<Mutex<Vec<u8>>>,
     context: Arc<Mutex<GpuContext>>,
@@ -206,74 +312,119 @@ impl Buffer for GpuBuffer {
         Some(self)
     }
 }
-
-// Ohne Gummi im Bahnhofsviertel... das wird noch Konsequenzen haben
-unsafe impl Sync for GpuContext {}
-unsafe impl Send for GpuBuffer {}
-
-impl GpuContext {
-    pub fn new(
-        gpu_platform: usize,
-        gpu_id: usize,
-        nonces_per_cache: usize,
-        mapping: bool,
-    ) -> GpuContext {
-        let platform_ids = core::get_platform_ids().unwrap();
-        let platform_id = platform_ids[gpu_platform];
-        let device_ids = core::get_device_ids(&platform_id, None, None).unwrap();
-        let device_id = device_ids[gpu_id];
-        let context_properties = ContextProperties::new().platform(platform_id);
-        let context =
-            core::create_context(Some(&context_properties), &[device_id], None, None).unwrap();
-        let src_cstring = CString::new(SRC).unwrap();
-        let program = core::create_program_with_source(&context, &[src_cstring]).unwrap();
-        core::build_program(
-            &program,
-            None::<&[()]>,
-            &CString::new("").unwrap(),
-            None,
-            None,
-        ).unwrap();
-        let queue = core::create_command_queue(&context, &device_id, None).unwrap();
-        let kernel1 = core::create_kernel(&program, "calculate_nonces").unwrap();
-
-        let kernel1_workgroup_size = get_kernel_work_group_size(&kernel1, device_id);
-
-        let mut workgroup_count = nonces_per_cache / kernel1_workgroup_size;
-        if nonces_per_cache % kernel1_workgroup_size != 0 {
-            workgroup_count += 1;
-        }
-
-        let gdim1 = [kernel1_workgroup_size * workgroup_count, 1, 1];
-        let ldim1 = [kernel1_workgroup_size, 1, 1];
-
-        GpuContext {
-            context,
-            queue,
-            kernel1,
-            ldim1,
-            gdim1,
-            mapping,
-        }
-    }
-}
+*/
 
 pub fn noncegen_gpu(
-    cache: *mut c_void,
-    cache_size: size_t,
-    chunk_offset: size_t,
-    numeric_id: uint64_t,
-    local_startnonce: uint64_t,
-    local_nonces: uint64_t,
+    cache: *mut u8,
+    cache_size: u64,
+    chunk_offset: u64,
+    numeric_id: u64,
+    local_startnonce: u64,
+    local_nonces: u64,
+    gpu_context: Arc<GpuContext>,
 ) {
     // to be changed!
+/*
+    unsafe {
+       let data = from_raw_parts(cache,  NONCE_SIZE as usize * cache_size as usize);
+    }
+*/
+    let numeric_id_be: u64 = unsafe { transmute(numeric_id.to_be()) };
 
-    // unsafe {
-    //  let data = Vec::from_raw_parts(cache as *mut Vec<u8>, (cache_size * NONCE_SIZE) as  usize, (cache_size * NONCE_SIZE) as usize);
-    // }
+    //let gpu_context = GpuContext::new(0, 0, local_nonces as usize, false);
 
-    let gpu_context = GpuContext::new(0, 0, 1024, false);
+    //let data_gpu = unsafe {
+    //    core::create_buffer::<_, u8>(&gpu_context.context, core::MEM_READ_WRITE, (NONCE_SIZE * 1024) as usize, None).unwrap()
+    //};
+
+    let hashes_per_run: usize = 32;
+    let mut start = 0;
+    let mut end = 0;
+
+            core::set_kernel_arg(
+            &gpu_context.kernel1,
+            0,
+            ArgVal::mem(&gpu_context.buffer_gpu_a),
+        ).unwrap();
+        core::set_kernel_arg(
+            &gpu_context.kernel1,
+            1,
+            ArgVal::primitive(&local_startnonce),
+        ).unwrap();
+        core::set_kernel_arg(&gpu_context.kernel1, 2, ArgVal::primitive(&numeric_id_be)).unwrap();
+
+    for i in (0..8192).step_by(hashes_per_run) {
+        if i + hashes_per_run < 8192 {
+            start = i;
+            end = i + hashes_per_run - 1;
+        } else {
+            start = i;
+            end = i + hashes_per_run;
+        }
+
+
+        core::set_kernel_arg(&gpu_context.kernel1, 3, ArgVal::primitive(&(start as i32))).unwrap();
+        core::set_kernel_arg(&gpu_context.kernel1, 4, ArgVal::primitive(&(end as i32))).unwrap();
+
+        unsafe {
+            core::enqueue_kernel(
+                &gpu_context.queue,
+                &gpu_context.kernel1,
+                1,
+                None,
+                &gpu_context.gdim1,
+                Some(gpu_context.ldim1),
+                None::<Event>,
+                None::<&mut Event>,
+            ).unwrap();
+        }
+        core::finish(&gpu_context.queue);
+    }
     return;
+
+    core::set_kernel_arg(
+        &gpu_context.kernel1,
+        0,
+        ArgVal::mem(&gpu_context.buffer_gpu_a),
+    ).unwrap();
+    core::set_kernel_arg(
+        &gpu_context.kernel1,
+        1,
+        ArgVal::primitive(&local_startnonce),
+    ).unwrap();
+    core::set_kernel_arg(&gpu_context.kernel1, 2, ArgVal::primitive(&numeric_id_be)).unwrap();
+
+    unsafe {
+        core::enqueue_kernel(
+            &gpu_context.queue,
+            &gpu_context.kernel1,
+            1,
+            None,
+            &gpu_context.gdim1,
+            Some(gpu_context.ldim1),
+            None::<Event>,
+            None::<&mut Event>,
+        ).unwrap();
+    }
+    core::finish(&gpu_context.queue);
+
+    /*
+    let mut datax = vec![1u8;  (NONCE_SIZE * local_nonces) as usize];
+    //let mut datax =  &gpu_context.buffer_host_a.lock().unwrap();
+    unsafe {
+        core::enqueue_read_buffer(
+            &gpu_context.queue,
+            &gpu_context.buffer_gpu_a,
+            true,
+            0,
+            &mut datax[0..],
+            None::<Event>,
+            None::<&mut Event>,
+        ).unwrap();
+    }
+    
+*/
+
     /*   
     core::set_kernel_arg(&gpu_context.kernel1, 0, ArgVal::mem(&buffer.gensig_gpu)).unwrap();
     core::set_kernel_arg(&gpu_context.kernel1, 1, ArgVal::mem(&buffer.data_gpu)).unwrap();

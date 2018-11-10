@@ -5,13 +5,14 @@ use chan;
 use libc::{c_void, size_t, uint64_t};
 #[cfg(feature = "opencl")]
 use ocl::noncegen_gpu;
+use ocl::GpuContext;
 use plotter::{Buffer, PlotterTask};
 use std::cmp::min;
 use std::sync::mpsc::{channel, Sender};
 use std::sync::Arc;
 
 const CPU_TASK_SIZE: u64 = 64;
-const GPU_TASK_SIZE: u64 = 1024;
+
 const NONCE_SIZE: u64 = (2 << 17);
 
 extern "C" {
@@ -61,8 +62,22 @@ pub struct SafeCVoid {
 }
 unsafe impl Send for SafeCVoid {}
 
+pub struct SafePointer {
+    ptr: *mut u8,
+}
+unsafe impl Send for SafePointer {}
+
 pub struct HasherTaskInfo {
     pub cache: SafeCVoid,
+    pub cache_size: size_t,
+    pub chunk_offset: size_t,
+    pub numeric_id: uint64_t,
+    pub local_startnonce: uint64_t,
+    pub local_nonces: uint64_t,
+}
+
+pub struct GPUHasherTaskInfo {
+    pub cache: SafePointer,
     pub cache_size: size_t,
     pub chunk_offset: size_t,
     pub numeric_id: uint64_t,
@@ -123,7 +138,11 @@ pub fn hash(tx: Sender<u64>, hasher_task: HasherTaskInfo, simd_ext: String) -> i
 
 // currently a thread, will be changed to async task
 #[cfg(feature = "opencl")]
-pub fn hash_gpu(tx: Sender<u64>, hasher_task: HasherTaskInfo, gpu_num: u8) -> impl FnOnce() {
+pub fn hash_gpu(
+    tx: Sender<u64>,
+    hasher_task: GPUHasherTaskInfo,
+    gpu_context: Arc<GpuContext>,
+) -> impl FnOnce() {
     move || {
         noncegen_gpu(
             hasher_task.cache.ptr,
@@ -132,6 +151,7 @@ pub fn hash_gpu(tx: Sender<u64>, hasher_task: HasherTaskInfo, gpu_num: u8) -> im
             hasher_task.numeric_id,
             hasher_task.local_startnonce,
             hasher_task.local_nonces,
+            gpu_context,
         );
         tx.send(hasher_task.local_nonces)
             .expect("Pool task can't communicate with hasher thread.");
@@ -146,9 +166,12 @@ pub fn create_hasher_task(
     rx_empty_buffers: chan::Receiver<Buffer>,
     tx_buffers_to_writer: chan::Sender<Buffer>,
     simd_ext: String,
+    gpu_contexts: Option<Vec<Arc<GpuContext>>>,
 ) -> impl FnOnce() {
     move || {
+        let gpu = gpu_contexts.unwrap();
         for buffer in rx_empty_buffers {
+            let GPU_TASK_SIZE: u64 = gpu[0].worksize as u64;
             let mut_bs = &buffer.get_buffer();
             let mut bs = mut_bs.lock().unwrap();
             let buffer_size = (*bs).len() as u64;
@@ -163,17 +186,17 @@ pub fn create_hasher_task(
             for j in 0..nonces_to_hash / GPU_TASK_SIZE {
                 let task = hash_gpu(
                     tx.clone(),
-                    HasherTaskInfo {
-                        cache: SafeCVoid {
-                            ptr: bs.as_ptr() as *mut c_void,
+                    GPUHasherTaskInfo {
+                        cache: SafePointer {
+                            ptr: bs.as_mut_ptr(),
                         },
-                        cache_size: buffer_size / NONCE_SIZE as size_t,
-                        chunk_offset: j * GPU_TASK_SIZE as size_t,
+                        cache_size: buffer_size / NONCE_SIZE,
+                        chunk_offset: j * GPU_TASK_SIZE,
                         numeric_id: task.numeric_id,
                         local_startnonce: task.start_nonce + nonces_hashed + j * GPU_TASK_SIZE,
                         local_nonces: GPU_TASK_SIZE,
                     },
-                    0u8
+                    gpu[0].clone()
                     //simd_ext.clone(),
                 );
 
@@ -184,19 +207,19 @@ pub fn create_hasher_task(
             if nonces_to_hash % GPU_TASK_SIZE > 0 {
                 let task = hash_gpu(
                     tx.clone(),
-                    HasherTaskInfo {
-                        cache: SafeCVoid {
-                            ptr: bs.as_ptr() as *mut c_void,
+                    GPUHasherTaskInfo {
+                        cache: SafePointer {
+                            ptr: bs.as_mut_ptr(),
                         },
-                        cache_size: buffer_size / NONCE_SIZE as size_t,
-                        chunk_offset: nonces_to_hash / GPU_TASK_SIZE * GPU_TASK_SIZE as size_t,
+                        cache_size: buffer_size / NONCE_SIZE,
+                        chunk_offset: nonces_to_hash / GPU_TASK_SIZE * GPU_TASK_SIZE,
                         numeric_id: task.numeric_id,
                         local_startnonce: task.start_nonce
                             + nonces_hashed
                             + nonces_to_hash / GPU_TASK_SIZE * GPU_TASK_SIZE,
                         local_nonces: nonces_to_hash % GPU_TASK_SIZE,
                     },
-                    0u8
+                    gpu[0].clone()
                     //simd_ext.clone(),
                 );
                 thread_pool.spawn(task);

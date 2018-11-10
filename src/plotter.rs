@@ -11,7 +11,7 @@ use chan;
 use core_affinity;
 use hasher::create_hasher_task;
 #[cfg(feature = "opencl")]
-use ocl::gpu_info;
+use ocl::gpu_init;
 use std::cmp::{max, min};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
@@ -105,13 +105,11 @@ impl Plotter {
             );
         }
 
-        if !task.quiet {
-            #[cfg(feature = "opencl")]
-            match &task.gpus {
-                Some(x) => gpu_info(&x),
-                None => (),
-            };
-        }
+        #[cfg(feature = "opencl")]
+        let gpu_contexts = match &task.gpus {
+            Some(x) => Some(gpu_init(&x, task.quiet)),
+            None => None,
+        };
 
         let file = Path::new(&task.output_path).join(format!(
             "{}_{}_{}",
@@ -308,6 +306,7 @@ impl Plotter {
                 rx_empty_buffers.clone(),
                 tx_full_buffers.clone(),
                 simd_ext,
+                gpu_contexts,
             )
         });
 
