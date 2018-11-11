@@ -165,7 +165,7 @@ impl Plotter {
 
         if !task.quiet {
             println!(
-                "RAM: Total={:.2} GiB, Free= {:.2} GiB, Usage= {:.2} GiB \n",
+                "RAM: Total={:.2} GiB, Free={:.2} GiB, Usage={:.2} GiB \n",
                 memory.total as f64 / 1024.0 / 1024.0,
                 memory.free as f64 / 1024.0 / 1024.0,
                 mem as f64 / 1024.0 / 1024.0 / 1024.0

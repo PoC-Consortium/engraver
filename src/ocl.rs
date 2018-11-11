@@ -169,7 +169,7 @@ impl GpuContext {
         let ldim1 = [kernel1_workgroup_size, 1, 1];
 
         // create buffer
-        print!("Creating Buffer...");
+        print!("Debug: Creating Buffer...");
         let buffer_gpu_a = unsafe {
             core::create_buffer::<_, u8>(
                 &context,

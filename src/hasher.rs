@@ -85,7 +85,7 @@ pub struct GPUHasherTaskInfo {
     pub local_nonces: uint64_t,
 }
 
-pub fn hash(tx: Sender<u64>, hasher_task: HasherTaskInfo, simd_ext: String) -> impl FnOnce() {
+pub fn hash(tx: Sender<(u8,u8,u64)>, hasher_task: HasherTaskInfo, simd_ext: String) -> impl FnOnce() {
     move || {
         unsafe {
             match &*simd_ext {
@@ -131,7 +131,7 @@ pub fn hash(tx: Sender<u64>, hasher_task: HasherTaskInfo, simd_ext: String) -> i
                 ),
             }
         }
-        tx.send(hasher_task.local_nonces)
+        tx.send((0u8,0u8,hasher_task.local_nonces))
             .expect("Pool task can't communicate with hasher thread.");
     }
 }
@@ -139,7 +139,7 @@ pub fn hash(tx: Sender<u64>, hasher_task: HasherTaskInfo, simd_ext: String) -> i
 // currently a thread, will be changed to async task
 #[cfg(feature = "opencl")]
 pub fn hash_gpu(
-    tx: Sender<u64>,
+    tx: Sender<(u8,u8,u64)>,
     hasher_task: GPUHasherTaskInfo,
     gpu_context: Arc<GpuContext>,
 ) -> impl FnOnce() {
@@ -153,7 +153,7 @@ pub fn hash_gpu(
             hasher_task.local_nonces,
             gpu_context,
         );
-        tx.send(hasher_task.local_nonces)
+        tx.send((1u8,0u8,hasher_task.local_nonces))
             .expect("Pool task can't communicate with hasher thread.");
     }
 }
@@ -181,6 +181,14 @@ pub fn create_hasher_task(
             if nonces_to_hash % GPU_TASK_SIZE > 0 {
                 n_jobs += 1;
             }
+
+            // communication chanel
+            // message protocol:    (hash_device_id: u8, message: u8, nonces processed: u64)
+            // hash_device_id:      0=CPU, 1=GPU0, 2=GPU1...
+            // message:             0 = data ready to write
+            //                      1 = device ready to compute next hashing batch
+            // nonces_processed:    nonces hashed / nonces writen to host buffer
+
             let (tx, rx) = channel();
 
             for j in 0..nonces_to_hash / GPU_TASK_SIZE {
@@ -230,11 +238,11 @@ pub fn create_hasher_task(
                 rx.iter().take(n_jobs).fold(0, |a, b| {
                     match &mut pb {
                         Some(pb) => {
-                            pb.add(b * 1024 * 256);
+                            pb.add(b.2 * 1024 * 256);
                         }
                         None => (),
                     }
-                    a + b
+                    a + b.2
                 }),
                 nonces_to_hash
             );
