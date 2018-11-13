@@ -12,7 +12,7 @@ const TASK_SIZE: u64 = 16384;
 const SCOOP_SIZE: u64 = 64;
 const NONCE_SIZE: u64 = 4096 * SCOOP_SIZE;
 
-pub fn create_writer_task(
+pub fn create_writer_thread(
     task: Arc<PlotterTask>,
     mut nonces_written: u64,
     mut pb: Option<pbr::ProgressBar<pbr::Pipe>>,
@@ -47,20 +47,20 @@ pub fn create_writer_task(
 
                 let mut local_addr = scoop * buffer_size / NONCE_SIZE * SCOOP_SIZE;
                 for _ in 0..nonces_to_write / TASK_SIZE {
-                    file.write_all(
-                        &bs[local_addr as usize..(local_addr + TASK_SIZE * SCOOP_SIZE) as usize],
-                    ).unwrap();
+                    //  file.write_all(
+                    //      &bs[local_addr as usize..(local_addr + TASK_SIZE * SCOOP_SIZE) as usize],
+                    //  ).unwrap();
 
                     local_addr += TASK_SIZE * SCOOP_SIZE;
                 }
 
                 // write remainder
                 if nonces_to_write % TASK_SIZE > 0 {
-                    file.write_all(
-                        &bs[local_addr as usize
-                                ..(local_addr + (nonces_to_write % TASK_SIZE) * SCOOP_SIZE)
-                                    as usize],
-                    ).unwrap();
+                    //  file.write_all(
+                    //      &bs[local_addr as usize
+                    //             ..(local_addr + (nonces_to_write % TASK_SIZE) * SCOOP_SIZE)
+                    //                  as usize],
+                    //  ).unwrap();
                 }
 
                 if (scoop + 1) % 128 == 0 {

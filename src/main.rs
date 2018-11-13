@@ -9,10 +9,11 @@ extern crate pbr;
 extern crate stopwatch;
 extern crate sys_info;
 
-mod hasher;
+mod gpu_hasher;
 #[cfg(feature = "opencl")]
 mod ocl;
 mod plotter;
+mod scheduler;
 mod utils;
 mod writer;
 

@@ -9,9 +9,9 @@ use self::pbr::{MultiBar, Units};
 use self::raw_cpuid::CpuId;
 use chan;
 use core_affinity;
-use hasher::create_hasher_task;
 #[cfg(feature = "opencl")]
 use ocl::gpu_init;
+use scheduler::create_scheduler_thread;
 use std::cmp::{max, min};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
@@ -22,7 +22,7 @@ use utils::get_sector_size;
 use utils::preallocate;
 #[cfg(windows)]
 use utils::set_thread_ideal_processor;
-use writer::{create_writer_task, read_resume_info, write_resume_info};
+use writer::{create_writer_thread, read_resume_info, write_resume_info};
 
 const NONCE_SIZE: u64 = (2 << 17);
 const SCOOP_SIZE: u64 = 64;
@@ -286,7 +286,7 @@ impl Plotter {
         }
 
         let hasher = thread::spawn({
-            create_hasher_task(
+            create_scheduler_thread(
                 task.clone(),
                 rayon::ThreadPoolBuilder::new()
                     .num_threads(cpu_threads as usize)
@@ -311,7 +311,7 @@ impl Plotter {
         });
 
         let writer = thread::spawn({
-            create_writer_task(
+            create_writer_thread(
                 task.clone(),
                 progress,
                 p2x,
