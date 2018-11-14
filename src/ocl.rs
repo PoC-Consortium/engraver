@@ -9,6 +9,7 @@ use self::core::{
 use gpu_hasher::GpuTask;
 
 const NONCE_SIZE: u64 = (2 << 17);
+const GPU_HASHES_PER_RUN: usize = 32;
 
 //use config::Cfg;
 use plotter::Buffer;
@@ -58,13 +59,14 @@ pub fn platform_info() {
 
 pub struct GpuContext {
     context: core::Context,
-    queue: core::CommandQueue,
-    kernel1: core::Kernel,
+    queue_a: core::CommandQueue,
+    queue_b: core::CommandQueue,
+    kernel: core::Kernel,
     ldim1: [usize; 3],
     gdim1: [usize; 3],
     mapping: bool,
     buffer_host_a: Vec<u8>,
-    //  buffer_host_b: Vec<u8>,
+    buffer_host_b: Vec<u8>,
     buffer_gpu_a: core::Mem,
     buffer_gpu_b: core::Mem,
     pub worksize: usize,
@@ -149,23 +151,21 @@ impl GpuContext {
             None,
             None,
         ).unwrap();
-        let queue = core::create_command_queue(&context, &device_id, None).unwrap();
-        let kernel1 = core::create_kernel(&program, "calculate_nonces").unwrap();
+        let queue_a = core::create_command_queue(&context, &device_id, None).unwrap();
+        let queue_b = core::create_command_queue(&context, &device_id, None).unwrap();
+        let kernel = core::create_kernel(&program, "calculate_nonces").unwrap();
 
-        let kernel1_workgroup_size = get_kernel_work_group_size(&kernel1, device_id);
+        let kernel_workgroup_size = get_kernel_work_group_size(&kernel, device_id);
 
         println!("Debug: max_nonces_per_cache={}", max_nonces_per_cache);
-        let mut workgroup_count = max_nonces_per_cache / kernel1_workgroup_size;
-        //if max_nonces_per_cache % kernel1_workgroup_size != 0 {
-        //    workgroup_count += 1;
-        //}
+        let mut workgroup_count = max_nonces_per_cache / kernel_workgroup_size;
 
-        let worksize = kernel1_workgroup_size * workgroup_count;
+        let worksize = kernel_workgroup_size * workgroup_count;
 
         println!("Debug: worksize={}", worksize);
 
         let gdim1 = [worksize, 1, 1];
-        let ldim1 = [kernel1_workgroup_size, 1, 1];
+        let ldim1 = [kernel_workgroup_size, 1, 1];
 
         // create buffer
         print!("Debug: Creating Buffer...");
@@ -187,18 +187,21 @@ impl GpuContext {
         };
 
         let buffer_host_a = vec![1u8; (NONCE_SIZE as usize) * worksize as usize];
+        let buffer_host_b = vec![1u8; (NONCE_SIZE as usize) * worksize as usize];
 
         println!("OK");
         GpuContext {
             context,
-            queue,
-            kernel1,
+            queue_a,
+            queue_b,
+            kernel,
             ldim1,
             gdim1,
             mapping,
             buffer_gpu_a,
             buffer_gpu_b,
-            buffer_host_a: buffer_host_a,
+            buffer_host_a,
+            buffer_host_b,
             worksize,
         }
     }
@@ -313,22 +316,70 @@ impl Buffer for GpuBuffer {
 }
 */
 
-// todo expand dual buffer
-pub fn gpu_hash(gpu_context: &GpuContext, buffer_id: u8, hasher_task: &GpuTask) {
-    /*
-        noncegen_gpu(
-            hasher_task.cache.ptr,
-            hasher_task.cache_size,
-            hasher_task.chunk_offset,
-            hasher_task.numeric_id,
-            hasher_task.local_startnonce,
-            hasher_task.local_nonces,
-            gpu_context,
-        );
-        */
+// todo limit kernel to nonce nb
+// first run
+pub fn gpu_hash(gpu_context: &GpuContext, task: &GpuTask) {
+    let numeric_id_be: u64 = unsafe { transmute(task.numeric_id.to_be()) };
+
+    let mut start = 0;
+    let mut end = 0;
+
+    core::set_kernel_arg(
+        &gpu_context.kernel,
+        0,
+        ArgVal::mem(&gpu_context.buffer_gpu_a),
+    ).unwrap();
+    core::set_kernel_arg(
+        &gpu_context.kernel,
+        1,
+        ArgVal::primitive(&task.local_startnonce),
+    ).unwrap();
+    core::set_kernel_arg(
+        &gpu_context.kernel,
+        5,
+        ArgVal::primitive(&task.local_nonces),
+    ).unwrap();
+    core::set_kernel_arg(&gpu_context.kernel, 2, ArgVal::primitive(&numeric_id_be)).unwrap();
+
+    for i in (0..8192).step_by(GPU_HASHES_PER_RUN) {
+        if i + GPU_HASHES_PER_RUN < 8192 {
+            start = i;
+            end = i + GPU_HASHES_PER_RUN - 1;
+        } else {
+            start = i;
+            end = i + GPU_HASHES_PER_RUN;
+        }
+
+        core::set_kernel_arg(&gpu_context.kernel, 3, ArgVal::primitive(&(start as i32))).unwrap();
+        core::set_kernel_arg(&gpu_context.kernel, 4, ArgVal::primitive(&(end as i32))).unwrap();
+
+        unsafe {
+            core::enqueue_kernel(
+                &gpu_context.queue_a,
+                &gpu_context.kernel,
+                1,
+                None,
+                &gpu_context.gdim1,
+                Some(gpu_context.ldim1),
+                None::<Event>,
+                None::<&mut Event>,
+            ).unwrap();
+        }
+        // todo check if this can be moved out of loop
+        core::finish(&gpu_context.queue_a).unwrap();
+    }
 }
 
-pub fn gpu_transfer_to_host(gpu_context: &GpuContext, buffer_id: u8, transfer_task: &GpuTask) {}
+pub fn gpu_transfer_to_host(gpu_context: &GpuContext, buffer_id: u8, transfer_task: &GpuTask) {
+    //  let numeric_id_be: u64 = unsafe { transmute(task.numeric_id.to_be()) };
+
+    //let gpu_context = GpuContext::new(0, 0, local_nonces as usize, false);
+
+    //let data_gpu = unsafe {
+    //    core::create_buffer::<_, u8>(&gpu_context.context, core::MEM_READ_WRITE, (NONCE_SIZE * 1024) as usize, None).unwrap()
+    //};
+
+}
 
 pub fn gpu_hash_and_transfer_to_host(
     gpu_context: &GpuContext,
@@ -336,9 +387,63 @@ pub fn gpu_hash_and_transfer_to_host(
     hasher_task: &GpuTask,
     transfer_task: &GpuTask,
 ) {
+    // todo initiate transfer
+    let numeric_id_be: u64 = unsafe { transmute(hasher_task.numeric_id.to_be()) };
 
+    let mut start = 0;
+    let mut end = 0;
+
+    core::set_kernel_arg(
+        &gpu_context.kernel,
+        0,
+        ArgVal::mem(if buffer_id == 0 {
+            &gpu_context.buffer_gpu_a
+        } else {
+            &gpu_context.buffer_gpu_b
+        }),
+    ).unwrap();
+    core::set_kernel_arg(
+        &gpu_context.kernel,
+        1,
+        ArgVal::primitive(&hasher_task.local_startnonce),
+    ).unwrap();
+    core::set_kernel_arg(
+        &gpu_context.kernel,
+        5,
+        ArgVal::primitive(&hasher_task.local_nonces),
+    ).unwrap();
+    core::set_kernel_arg(&gpu_context.kernel, 2, ArgVal::primitive(&numeric_id_be)).unwrap();
+
+    for i in (0..8192).step_by(GPU_HASHES_PER_RUN) {
+        if i + GPU_HASHES_PER_RUN < 8192 {
+            start = i;
+            end = i + GPU_HASHES_PER_RUN - 1;
+        } else {
+            start = i;
+            end = i + GPU_HASHES_PER_RUN;
+        }
+
+        core::set_kernel_arg(&gpu_context.kernel, 3, ArgVal::primitive(&(start as i32))).unwrap();
+        core::set_kernel_arg(&gpu_context.kernel, 4, ArgVal::primitive(&(end as i32))).unwrap();
+
+        unsafe {
+            core::enqueue_kernel(
+                &gpu_context.queue_a,
+                &gpu_context.kernel,
+                1,
+                None,
+                &gpu_context.gdim1,
+                Some(gpu_context.ldim1),
+                None::<Event>,
+                None::<&mut Event>,
+            ).unwrap();
+        }
+        // todo check if this can be moved out of loop
+        core::finish(&gpu_context.queue_a).unwrap();
+    }
 }
 
+/*
 pub fn noncegen_gpu(
     cache: *mut u8,
     cache_size: u64,
@@ -367,16 +472,16 @@ pub fn noncegen_gpu(
     let mut end = 0;
 
     core::set_kernel_arg(
-        &gpu_context.kernel1,
+        &gpu_context.kernel,
         0,
         ArgVal::mem(&gpu_context.buffer_gpu_a),
     ).unwrap();
     core::set_kernel_arg(
-        &gpu_context.kernel1,
+        &gpu_context.kernel,
         1,
         ArgVal::primitive(&local_startnonce),
     ).unwrap();
-    core::set_kernel_arg(&gpu_context.kernel1, 2, ArgVal::primitive(&numeric_id_be)).unwrap();
+    core::set_kernel_arg(&gpu_context.kernel, 2, ArgVal::primitive(&numeric_id_be)).unwrap();
 
     for i in (0..8192).step_by(hashes_per_run) {
         if i + hashes_per_run < 8192 {
@@ -387,13 +492,13 @@ pub fn noncegen_gpu(
             end = i + hashes_per_run;
         }
 
-        core::set_kernel_arg(&gpu_context.kernel1, 3, ArgVal::primitive(&(start as i32))).unwrap();
-        core::set_kernel_arg(&gpu_context.kernel1, 4, ArgVal::primitive(&(end as i32))).unwrap();
+        core::set_kernel_arg(&gpu_context.kernel, 3, ArgVal::primitive(&(start as i32))).unwrap();
+        core::set_kernel_arg(&gpu_context.kernel, 4, ArgVal::primitive(&(end as i32))).unwrap();
 
         unsafe {
             core::enqueue_kernel(
                 &gpu_context.queue,
-                &gpu_context.kernel1,
+                &gpu_context.kernel,
                 1,
                 None,
                 &gpu_context.gdim1,
@@ -407,21 +512,21 @@ pub fn noncegen_gpu(
     return;
 
     core::set_kernel_arg(
-        &gpu_context.kernel1,
+        &gpu_context.kernel,
         0,
         ArgVal::mem(&gpu_context.buffer_gpu_a),
     ).unwrap();
     core::set_kernel_arg(
-        &gpu_context.kernel1,
+        &gpu_context.kernel,
         1,
         ArgVal::primitive(&local_startnonce),
     ).unwrap();
-    core::set_kernel_arg(&gpu_context.kernel1, 2, ArgVal::primitive(&numeric_id_be)).unwrap();
+    core::set_kernel_arg(&gpu_context.kernel, 2, ArgVal::primitive(&numeric_id_be)).unwrap();
 
     unsafe {
         core::enqueue_kernel(
             &gpu_context.queue,
-            &gpu_context.kernel1,
+            &gpu_context.kernel,
             1,
             None,
             &gpu_context.gdim1,
@@ -432,7 +537,7 @@ pub fn noncegen_gpu(
     }
     core::finish(&gpu_context.queue).unwrap();
 
-    /*
+    
     let mut datax = vec![1u8;  (NONCE_SIZE * local_nonces) as usize];
     //let mut datax =  &gpu_context.buffer_host_a.lock().unwrap();
     unsafe {
@@ -447,9 +552,9 @@ pub fn noncegen_gpu(
         ).unwrap();
     }
     
-*/
 
-    /*   
+       
+
     core::set_kernel_arg(&gpu_context.kernel1, 0, ArgVal::mem(&buffer.gensig_gpu)).unwrap();
     core::set_kernel_arg(&gpu_context.kernel1, 1, ArgVal::mem(&buffer.data_gpu)).unwrap();
     core::set_kernel_arg(&gpu_context.kernel1, 2, ArgVal::mem(&buffer.deadlines_gpu)).unwrap();
@@ -468,8 +573,7 @@ pub fn noncegen_gpu(
     }
 
  return;
-    */
-    /*    
+      
     let gpu_context_mtx = (*buffer).get_gpu_context().unwrap();
     let gpu_context = gpu_context_mtx.lock().unwrap();
 
@@ -582,9 +686,9 @@ pub fn noncegen_gpu(
             None::<&mut Event>,
         ).unwrap();
     }
-    */
+    
 }
-
+*/
 fn get_kernel_work_group_size(x: &core::Kernel, y: core::DeviceId) -> usize {
     match core::get_kernel_work_group_info(x, y, KernelWorkGroupInfo::WorkGroupSize).unwrap() {
         core::KernelWorkGroupInfoResult::WorkGroupSize(kws) => kws,

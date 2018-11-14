@@ -1,5 +1,4 @@
 use chan::Receiver;
-use ocl::noncegen_gpu;
 use ocl::{gpu_hash, gpu_hash_and_transfer_to_host, gpu_transfer_to_host, GpuContext};
 use std::sync::mpsc::Sender;
 use std::sync::Arc;
@@ -18,7 +17,8 @@ pub struct GpuTask {
     pub local_nonces: u64,
 }
 
-// currently a thread, will be changed to async task
+// last working but will be removed
+/*
 #[cfg(feature = "opencl")]
 pub fn hash_gpu(
     tx: Sender<(u8, u8, u64)>,
@@ -39,7 +39,7 @@ pub fn hash_gpu(
             .expect("Pool task can't communicate with hasher thread.");
     }
 }
-
+*/
 pub fn create_gpu_hasher_thread(
     gpu_id: u8,
     gpu_context: Arc<GpuContext>,
@@ -66,7 +66,7 @@ pub fn create_gpu_hasher_thread(
                     if first_run {
                         if task.local_nonces != 0 {
                             first_run = false;
-                            gpu_hash(&gpu_context, buffer_id, &task);
+                            gpu_hash(&gpu_context, &task);
                             buffer_id = 1 - buffer_id;
                             last_task = task;
                             tx.send((gpu_id, 1u8, 0))

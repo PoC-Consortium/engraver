@@ -10,8 +10,6 @@ use cpu_hasher::{hash_cpu, CpuTask, SafeCVoid};
 use gpu_hasher::{create_gpu_hasher_thread, GpuTask, SafePointer};
 use libc::{c_void, size_t};
 #[cfg(feature = "opencl")]
-use ocl::noncegen_gpu;
-#[cfg(feature = "opencl")]
 use ocl::GpuContext;
 use plotter::{Buffer, PlotterTask};
 use std::cmp::min;
@@ -66,7 +64,30 @@ pub fn create_scheduler_thread(
             let mut processed = 0u64;
 
             // todo kickoff first gpu and cpu runs
-            for (i, gpu) in gpus.iter().enumerate() {}
+            for (i, gpu) in gpus.iter().enumerate() {
+                // schedule next gpu task
+                let task_size = min(
+                    gpu.worksize as u64,
+                    nonces_to_hash - requested,
+                );
+                if task_size > 0 {
+                    gpu_channels[i].0.send(
+                        Some(GpuTask {
+                            cache: SafePointer {
+                                ptr: bs.as_mut_ptr(),
+                            },
+                            cache_size: buffer_size / NONCE_SIZE,
+                            chunk_offset: requested,
+                            numeric_id: task.numeric_id,
+                            local_startnonce: task.start_nonce + nonces_hashed + requested,
+                            local_nonces: task_size,
+                        })
+                    );
+                }
+               requested += task_size;
+               //println!("Debug: Device: {} started. {} nonces assigned. Total requested: {}\n\n\n",i+1,task_size,requested);
+
+            }
 
             for i in 0..task.cpu_threads {
                 let task_size = min(CPU_TASK_SIZE, nonces_to_hash - requested);
@@ -124,10 +145,10 @@ pub fn create_scheduler_thread(
                             _ => {
                                 // schedule next gpu task
                                 let task_size = min(
-                                    gpus[msg.0 as usize].worksize as u64,
+                                    gpus[(msg.0 - 1) as usize].worksize as u64,
                                     nonces_to_hash - requested,
                                 );
-                                gpu_channels[msg.0 as usize].0.send(if task_size > 0 {
+                                gpu_channels[(msg.0 - 1) as usize].0.send(
                                     Some(GpuTask {
                                         cache: SafePointer {
                                             ptr: bs.as_mut_ptr(),
@@ -140,15 +161,14 @@ pub fn create_scheduler_thread(
                                             + requested,
                                         local_nonces: task_size,
                                     })
-                                } else {
-                                    None
-                                });
+                                );                            
                                 task_size
                             }
                         };
 
                         requested += task_size;
-                        //println!("Debug: Device: {} asked for work. {} nonces assigned. Total requested: {}",msg.0,task_size,requested);
+                        //println!("Debug: Device: {} asked for work. {} nonces assigned. Total requested: {}\n\n\n",msg.0,task_size,requested);
+
                     }
                     // process work completed message
                     0 => {
@@ -159,10 +179,6 @@ pub fn create_scheduler_thread(
                             }
                             None => (),
                         }
-                        //println!(
-                         //   "Debug: Device: {} processed {} nonces. Total processed: {}",
-                         //   msg.0, msg.2, processed
-                       // );
                     }
                     _ => {}
                 }
