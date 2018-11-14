@@ -371,13 +371,30 @@ pub fn gpu_hash(gpu_context: &GpuContext, task: &GpuTask) {
 }
 
 pub fn gpu_transfer_to_host(gpu_context: &GpuContext, buffer_id: u8, transfer_task: &GpuTask) {
-    //  let numeric_id_be: u64 = unsafe { transmute(task.numeric_id.to_be()) };
 
-    //let gpu_context = GpuContext::new(0, 0, local_nonces as usize, false);
-
-    //let data_gpu = unsafe {
-    //    core::create_buffer::<_, u8>(&gpu_context.context, core::MEM_READ_WRITE, (NONCE_SIZE * 1024) as usize, None).unwrap()
-    //};
+    if bufferid == 0{
+     unsafe {
+        core::enqueue_read_buffer(
+            &gpu_context.queue,
+            &gpu_context.buffer_gpu_a,
+            true,
+            0,
+            &mut datax[0..],
+            None::<Event>,
+            None::<&mut Event>,
+        ).unwrap();
+    }
+    } else {
+        core::enqueue_read_buffer(
+            &gpu_context.queue,
+            &gpu_context.buffer_gpu_a,
+            true,
+            0,
+            &mut datax[0..],
+            None::<Event>,
+            None::<&mut Event>,
+        ).unwrap();
+    }
 
 }
 
