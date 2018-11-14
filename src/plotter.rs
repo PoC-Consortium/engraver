@@ -92,20 +92,6 @@ impl Plotter {
             );
         }
 
-        let file = Path::new(&task.output_path).join(format!(
-            "{}_{}_{}",
-            task.numeric_id, task.start_nonce, task.nonces
-        ));
-
-        if !file.parent().unwrap().exists() {
-            println!(
-                "Error: specified target path does not exist, path={}",
-                &task.output_path
-            );
-            println!("Shutting down...");
-            return;
-        }
-
         // use all avaiblable disk space if nonce parameter has been omitted
         let free_disk_space = free_disk_space(&task.output_path);
         if task.nonces == 0 {
@@ -127,8 +113,22 @@ impl Plotter {
 
         let plotsize = task.nonces * NONCE_SIZE;
 
+        let file = Path::new(&task.output_path).join(format!(
+            "{}_{}_{}",
+            task.numeric_id, task.start_nonce, task.nonces
+        ));
+
+        if !file.parent().unwrap().exists() {
+            println!(
+                "Error: specified target path does not exist, path={}",
+                &task.output_path
+            );
+            println!("Shutting down...");
+            return;
+        }
+
         // check available disk space
-        if free_disk_space < plotsize {
+        if free_disk_space < plotsize && !file.exists(){
             println!(
                 "Error: insufficient disk space, MiB_required={}, MiB_available={}",
                 plotsize as f64 / 1024.0 / 1024.0,
