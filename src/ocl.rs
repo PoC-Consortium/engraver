@@ -6,9 +6,6 @@ use self::core::{
     ArgVal, ContextProperties, DeviceInfo, Event, KernelWorkGroupInfo, PlatformInfo, Status,
 };
 
-use libc::{c_void, size_t, uint64_t};
-use std::sync::mpsc::{channel, Sender};
-
 use gpu_hasher::GpuTask;
 
 const NONCE_SIZE: u64 = (2 << 17);

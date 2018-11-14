@@ -1,5 +1,5 @@
-use libc::{c_void, size_t, uint64_t}
-use std::sync::mpsc::{channel, Sender};
+use libc::{c_void, size_t, uint64_t};
+use std::sync::mpsc::Sender;
 
 extern "C" {
     pub fn noncegen(
@@ -44,7 +44,7 @@ extern "C" {
     );
 }
 pub struct SafeCVoid {
-    ptr: *mut c_void,
+    pub ptr: *mut c_void,
 }
 unsafe impl Send for SafeCVoid {}
 
@@ -57,7 +57,11 @@ pub struct CpuTask {
     pub local_nonces: uint64_t,
 }
 
-pub fn hash(tx: Sender<(u8,u8,u64)>, hasher_task: CpuTask, simd_ext: String) -> impl FnOnce() {
+pub fn hash_cpu(
+    tx: Sender<(u8, u8, u64)>,
+    hasher_task: CpuTask,
+    simd_ext: String,
+) -> impl FnOnce() {
     move || {
         unsafe {
             match &*simd_ext {
@@ -104,11 +108,10 @@ pub fn hash(tx: Sender<(u8,u8,u64)>, hasher_task: CpuTask, simd_ext: String) -> 
             }
         }
         // report hashing done
-        tx.send((0u8,1u8,0))
+        tx.send((0u8, 1u8, 0))
             .expect("CPU task can't communicate with scheduler thread.");
         // report data in hostmem
-        tx.send((0u8,0u8,hasher_task.local_nonces))
+        tx.send((0u8, 0u8, hasher_task.local_nonces))
             .expect("CPU task can't communicate with scheduler thread.");
     }
 }
-
