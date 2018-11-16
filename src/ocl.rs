@@ -95,7 +95,8 @@ pub fn gpu_init(gpus: &Vec<String>, quiet: bool) -> Vec<Arc<GpuContext>> {
             process::exit(0);
         }
         let device = device_ids[gpu_id];
-        let mut total_mem = match core::get_device_info(&device, DeviceInfo::GlobalMemSize).unwrap() {
+        let mut total_mem = match core::get_device_info(&device, DeviceInfo::GlobalMemSize).unwrap()
+        {
             core::DeviceInfoResult::GlobalMemSize(mem) => {
                 if !quiet {
                     println!(
@@ -427,8 +428,8 @@ pub fn gpu_transfer_to_host(gpu_context: &GpuContext, buffer_id: u8, transfer_ta
                             + (n + k + transfer_task.chunk_offset) * SCOOP_SIZE
                             + (i & 1) * 32
                             + j) as usize;
-                        let buffer_offset =
-                            ((i * 32 + j) * MSHABAL512_VECTOR_SIZE + k * 4) as usize;
+                        let buffer_offset = 
+                            (n * NONCE_SIZE + (i * 32 + j) * MSHABAL512_VECTOR_SIZE + k * 4) as usize;
                         &data[data_offset..(data_offset + 4)]
                             .clone_from_slice(&buffer[buffer_offset..(buffer_offset + 4)]);
                     }
@@ -538,7 +539,7 @@ pub fn gpu_hash_and_transfer_to_host(
             NONCE_SIZE as usize * transfer_task.cache_size as usize,
         );
 
-        for n in (0..transfer_task.local_nonces).step_by(16) {
+        for n in (0..transfer_task.local_nonces).step_by(16) {            
             for i in 0..(NUM_SCOOPS * 2) {
                 for j in (0..32).step_by(4) {
                     for k in 0..MSHABAL512_VECTOR_SIZE {
@@ -548,8 +549,8 @@ pub fn gpu_hash_and_transfer_to_host(
                             + (n + k + transfer_task.chunk_offset) * SCOOP_SIZE
                             + (i & 1) * 32
                             + j) as usize;
-                        let buffer_offset =
-                            ((i * 32 + j) * MSHABAL512_VECTOR_SIZE + k * 4) as usize;
+                        let buffer_offset = 
+                            (n * NONCE_SIZE + (i * 32 + j) * MSHABAL512_VECTOR_SIZE + k * 4) as usize;
                         &data[data_offset..(data_offset + 4)]
                             .clone_from_slice(&buffer[buffer_offset..(buffer_offset + 4)]);
                     }
