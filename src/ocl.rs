@@ -371,14 +371,14 @@ pub fn gpu_hash(gpu_context: &GpuContext, task: &GpuTask) {
 }
 
 pub fn gpu_transfer_to_host(gpu_context: &GpuContext, buffer_id: u8, transfer_task: &GpuTask) {
-    let mut buffer = if buffer_id == 0 {
+    let mut buffer = if buffer_id == 1 {
         gpu_context.buffer_host_a.lock().unwrap()
     } else {
         gpu_context.buffer_host_b.lock().unwrap()
     };
 
     unsafe {
-        if buffer_id == 0 {
+        if buffer_id == 1 {
             core::enqueue_read_buffer(
                 &gpu_context.queue_b,
                 &gpu_context.buffer_gpu_a,
@@ -436,18 +436,6 @@ pub fn gpu_transfer_to_host(gpu_context: &GpuContext, buffer_id: u8, transfer_ta
             }
         }
     }
-    /*
-    for (int i = 0; i < NUM_SCOOPS * 2; i++) {
-        for (int j = 0; j < 32; j += 4) {
-            for (int k = 0; k < MSHABAL512_VECTOR_SIZE; k += 1) {
-            memcpy(&cache[((i & 1) * (4095 - (i >> 1)) + ((i + 1) & 1) * (i >> 1)) *
-                                      SCOOP_SIZE * cache_size +
-                                  (n + k + chunk_offset) * SCOOP_SIZE + (i & 1) * 32 + j],
-                           &buffer[(i * 32 + j) * MSHABAL512_VECTOR_SIZE + k * 4], 4);
-            }
-        }
-    }
-    */
 }
 
 pub fn gpu_hash_and_transfer_to_host(

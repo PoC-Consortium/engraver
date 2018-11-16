@@ -17,29 +17,6 @@ pub struct GpuTask {
     pub local_nonces: u64,
 }
 
-// last working but will be removed
-/*
-#[cfg(feature = "opencl")]
-pub fn hash_gpu(
-    tx: Sender<(u8, u8, u64)>,
-    hasher_task: GpuTask,
-    gpu_context: Arc<GpuContext>,
-) -> impl FnOnce() {
-    move || {
-        noncegen_gpu(
-            hasher_task.cache.ptr,
-            hasher_task.cache_size,
-            hasher_task.chunk_offset,
-            hasher_task.numeric_id,
-            hasher_task.local_startnonce,
-            hasher_task.local_nonces,
-            gpu_context,
-        );
-        tx.send((1u8, 0u8, hasher_task.local_nonces))
-            .expect("Pool task can't communicate with hasher thread.");
-    }
-}
-*/
 pub fn create_gpu_hasher_thread(
     gpu_id: u8,
     gpu_context: Arc<GpuContext>,
