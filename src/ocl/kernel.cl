@@ -378,7 +378,7 @@ __constant static const sph_u32 C_init_512[] = {
 		0xFFFF0000FFFF0000UL)
 
 #define Address(nonce,hash,word) ((nonce >> NONCES_VECTOR_LOG2) * NONCES_VECTOR * NONCE_SIZE_WORDS + (hash) * NONCES_VECTOR * HASH_SIZE_WORDS + word * NONCES_VECTOR + (nonce & (NONCES_VECTOR-1)))
-//#define Address(nonce,hash,word) (nonce * NONCE_SIZE_WORDS + hash * HASH_SIZE_WORDS + (word)
+//#define Address(nonce,hash,word) (nonce * NONCE_SIZE_WORDS + hash * HASH_SIZE_WORDS + (word))
 
 /* Johnny's optimised nonce calculation kernel 
  * based on the implementation found in BRS
