@@ -372,6 +372,10 @@ fn calculate_mem_to_use(
     }
     mem = min(mem, plotsize);
 
+    // opencl requires buffer to be a multiple of 16 (data coalescence magic)
+    #[cfg(feature = "opencl")]
+    let nonces_per_sector = max(16, nonces_per_sector);
+
     // don't exceed free memory and leave some elbow room 1-1000/1024
     mem = min(mem, memory.free * 1000);
 

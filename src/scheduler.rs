@@ -83,7 +83,7 @@ pub fn create_scheduler_thread(
                 //println!("Debug: Device: {} started. {} nonces assigned. Total requested: {}\n\n\n",i+1,task_size,requested);
             }
 
-            for i in 0..task.cpu_threads {
+            for _ in 0..task.cpu_threads {
                 let task_size = min(CPU_TASK_SIZE, nonces_to_hash - requested);
                 if task_size > 0 {
                     let task = hash_cpu(

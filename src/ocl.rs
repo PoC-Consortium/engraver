@@ -15,13 +15,12 @@ const MSHABAL512_VECTOR_SIZE: u64 = 16;
 const SCOOP_SIZE: u64 = 64;
 
 //use config::Cfg;
-use plotter::Buffer;
 use std::ffi::CString;
 use std::slice::from_raw_parts_mut;
 
 use std::mem::transmute;
 use std::process;
-use std::slice::from_raw_parts;
+
 use std::sync::{Arc, Mutex};
 use std::u64;
 
@@ -62,7 +61,6 @@ pub fn platform_info() {
 }
 
 pub struct GpuContext {
-    context: core::Context,
     queue_a: core::CommandQueue,
     queue_b: core::CommandQueue,
     kernel: core::Kernel,
@@ -97,10 +95,8 @@ pub fn gpu_init(gpus: &Vec<String>, quiet: bool) -> Vec<Arc<GpuContext>> {
             process::exit(0);
         }
         let device = device_ids[gpu_id];
-        let mut total_mem = 0;
-        match core::get_device_info(&device, DeviceInfo::GlobalMemSize).unwrap() {
+        let mut total_mem = match core::get_device_info(&device, DeviceInfo::GlobalMemSize).unwrap() {
             core::DeviceInfoResult::GlobalMemSize(mem) => {
-                total_mem = mem;
                 if !quiet {
                     println!(
                         "GPU: {} - {} [RAM={}MiB, Cores={}]",
@@ -110,9 +106,10 @@ pub fn gpu_init(gpus: &Vec<String>, quiet: bool) -> Vec<Arc<GpuContext>> {
                         to_string!(core::get_device_info(&device, DeviceInfo::MaxComputeUnits))
                     );
                 }
+                mem
             }
             _ => panic!("Unexpected error. Can't obtain GPU memory size."),
-        }
+        };
 
         // use max 75% of total gpu mem
         // todo: user limit
@@ -195,7 +192,6 @@ impl GpuContext {
 
         println!("OK");
         GpuContext {
-            context,
             queue_a,
             queue_b,
             kernel,
@@ -325,8 +321,8 @@ impl Buffer for GpuBuffer {
 pub fn gpu_hash(gpu_context: &GpuContext, task: &GpuTask) {
     let numeric_id_be: u64 = unsafe { transmute(task.numeric_id.to_be()) };
 
-    let mut start = 0;
-    let mut end = 0;
+    let mut start;
+    let mut end;
 
     core::set_kernel_arg(
         &gpu_context.kernel,
@@ -494,8 +490,8 @@ pub fn gpu_hash_and_transfer_to_host(
 
     let numeric_id_be: u64 = unsafe { transmute(hasher_task.numeric_id.to_be()) };
 
-    let mut start = 0;
-    let mut end = 0;
+    let mut start;
+    let mut end;
 
     core::set_kernel_arg(
         &gpu_context.kernel,
@@ -543,42 +539,38 @@ pub fn gpu_hash_and_transfer_to_host(
             ).unwrap();
         }
 
-
-
         // todo de-shuffle
     }
-            // todo check if this can be moved out of loop
-        core::finish(&gpu_context.queue_b).unwrap();
+    // todo check if this can be moved out of loop
+    core::finish(&gpu_context.queue_b).unwrap();
 
-        unsafe {
-            let data = from_raw_parts_mut(
-                transfer_task.cache.ptr,
-                NONCE_SIZE as usize * transfer_task.cache_size as usize,
-            );
+    unsafe {
+        let data = from_raw_parts_mut(
+            transfer_task.cache.ptr,
+            NONCE_SIZE as usize * transfer_task.cache_size as usize,
+        );
 
-            for n in (0..transfer_task.local_nonces).step_by(16) {
-                for i in 0..(NUM_SCOOPS * 2) {
-                    for j in (0..32).step_by(4) {
-                        for k in 0..MSHABAL512_VECTOR_SIZE {
-                            let data_offset = (((i & 1) * (4095 - (i >> 1))
-                                + ((i + 1) & 1) * (i >> 1))
-                                * SCOOP_SIZE
-                                * transfer_task.cache_size
-                                + (n + k + transfer_task.chunk_offset) * SCOOP_SIZE
-                                + (i & 1) * 32
-                                + j) as usize;
-                            let buffer_offset =
-                                ((i * 32 + j) * MSHABAL512_VECTOR_SIZE + k * 4) as usize;
-                            &data[data_offset..(data_offset + 4)]
-                                .clone_from_slice(&buffer[buffer_offset..(buffer_offset + 4)]);
-                        }
+        for n in (0..transfer_task.local_nonces).step_by(16) {
+            for i in 0..(NUM_SCOOPS * 2) {
+                for j in (0..32).step_by(4) {
+                    for k in 0..MSHABAL512_VECTOR_SIZE {
+                        let data_offset = (((i & 1) * (4095 - (i >> 1)) + ((i + 1) & 1) * (i >> 1))
+                            * SCOOP_SIZE
+                            * transfer_task.cache_size
+                            + (n + k + transfer_task.chunk_offset) * SCOOP_SIZE
+                            + (i & 1) * 32
+                            + j) as usize;
+                        let buffer_offset =
+                            ((i * 32 + j) * MSHABAL512_VECTOR_SIZE + k * 4) as usize;
+                        &data[data_offset..(data_offset + 4)]
+                            .clone_from_slice(&buffer[buffer_offset..(buffer_offset + 4)]);
                     }
                 }
             }
         }
+    }
 
-        core::finish(&gpu_context.queue_a).unwrap();
-    
+    core::finish(&gpu_context.queue_a).unwrap();
 }
 
 /*
