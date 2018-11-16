@@ -47,20 +47,20 @@ pub fn create_writer_thread(
 
                 let mut local_addr = scoop * buffer_size / NONCE_SIZE * SCOOP_SIZE;
                 for _ in 0..nonces_to_write / TASK_SIZE {
-                    //  file.write_all(
-                    //      &bs[local_addr as usize..(local_addr + TASK_SIZE * SCOOP_SIZE) as usize],
-                    //  ).unwrap();
+                    file.write_all(
+                        &bs[local_addr as usize..(local_addr + TASK_SIZE * SCOOP_SIZE) as usize],
+                    ).unwrap();
 
                     local_addr += TASK_SIZE * SCOOP_SIZE;
                 }
 
                 // write remainder
                 if nonces_to_write % TASK_SIZE > 0 {
-                    //  file.write_all(
-                    //      &bs[local_addr as usize
-                    //             ..(local_addr + (nonces_to_write % TASK_SIZE) * SCOOP_SIZE)
-                    //                  as usize],
-                    //  ).unwrap();
+                    file.write_all(
+                        &bs[local_addr as usize
+                                ..(local_addr + (nonces_to_write % TASK_SIZE) * SCOOP_SIZE)
+                                    as usize],
+                    ).unwrap();
                 }
 
                 if (scoop + 1) % 128 == 0 {

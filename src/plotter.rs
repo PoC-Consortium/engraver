@@ -110,7 +110,7 @@ impl Plotter {
             Some(x) => Some(gpu_init(&x, task.quiet)),
             None => None,
         };
-        
+
         // use all avaiblable disk space if nonce parameter has been omitted
         let free_disk_space = free_disk_space(&task.output_path);
         if task.nonces == 0 {
@@ -147,7 +147,7 @@ impl Plotter {
         }
 
         // check available disk space
-        if free_disk_space < plotsize && !file.exists(){
+        if free_disk_space < plotsize && !file.exists() {
             println!(
                 "Error: insufficient disk space, MiB_required={}, MiB_available={}",
                 plotsize as f64 / 1024.0 / 1024.0,

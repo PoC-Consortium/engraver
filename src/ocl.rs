@@ -9,11 +9,15 @@ use self::core::{
 use gpu_hasher::GpuTask;
 
 const NONCE_SIZE: u64 = (2 << 17);
+const NUM_SCOOPS: u64 = 4096;
 const GPU_HASHES_PER_RUN: usize = 32;
+const MSHABAL512_VECTOR_SIZE: u64 = 16;
+const SCOOP_SIZE: u64 = 64;
 
 //use config::Cfg;
 use plotter::Buffer;
 use std::ffi::CString;
+use std::slice::from_raw_parts_mut;
 
 use std::mem::transmute;
 use std::process;
@@ -65,8 +69,8 @@ pub struct GpuContext {
     ldim1: [usize; 3],
     gdim1: [usize; 3],
     mapping: bool,
-    buffer_host_a: Vec<u8>,
-    buffer_host_b: Vec<u8>,
+    buffer_host_a: Arc<Mutex<Vec<u8>>>,
+    buffer_host_b: Arc<Mutex<Vec<u8>>>,
     buffer_gpu_a: core::Mem,
     buffer_gpu_b: core::Mem,
     pub worksize: usize,
@@ -158,7 +162,7 @@ impl GpuContext {
         let kernel_workgroup_size = get_kernel_work_group_size(&kernel, device_id);
 
         println!("Debug: max_nonces_per_cache={}", max_nonces_per_cache);
-        let mut workgroup_count = max_nonces_per_cache / kernel_workgroup_size;
+        let workgroup_count = max_nonces_per_cache / kernel_workgroup_size;
 
         let worksize = kernel_workgroup_size * workgroup_count;
 
@@ -200,8 +204,8 @@ impl GpuContext {
             mapping,
             buffer_gpu_a,
             buffer_gpu_b,
-            buffer_host_a,
-            buffer_host_b,
+            buffer_host_a: Arc::new(Mutex::new(buffer_host_a)),
+            buffer_host_b: Arc::new(Mutex::new(buffer_host_b)),
             worksize,
         }
     }
@@ -371,31 +375,83 @@ pub fn gpu_hash(gpu_context: &GpuContext, task: &GpuTask) {
 }
 
 pub fn gpu_transfer_to_host(gpu_context: &GpuContext, buffer_id: u8, transfer_task: &GpuTask) {
-
-    if bufferid == 0{
-     unsafe {
-        core::enqueue_read_buffer(
-            &gpu_context.queue,
-            &gpu_context.buffer_gpu_a,
-            true,
-            0,
-            &mut datax[0..],
-            None::<Event>,
-            None::<&mut Event>,
-        ).unwrap();
-    }
+    let mut buffer = if buffer_id == 0 {
+        gpu_context.buffer_host_a.lock().unwrap()
     } else {
-        core::enqueue_read_buffer(
-            &gpu_context.queue,
-            &gpu_context.buffer_gpu_a,
-            true,
-            0,
-            &mut datax[0..],
-            None::<Event>,
-            None::<&mut Event>,
-        ).unwrap();
+        gpu_context.buffer_host_b.lock().unwrap()
+    };
+
+    unsafe {
+        if buffer_id == 0 {
+            core::enqueue_read_buffer(
+                &gpu_context.queue_b,
+                &gpu_context.buffer_gpu_a,
+                true,
+                0,
+                &mut buffer[0..],
+                None::<Event>,
+                None::<&mut Event>,
+            ).unwrap();
+        } else {
+            core::enqueue_read_buffer(
+                &gpu_context.queue_b,
+                &gpu_context.buffer_gpu_b,
+                true,
+                0,
+                &mut buffer[0..],
+                None::<Event>,
+                None::<&mut Event>,
+            ).unwrap();
+        }
     }
 
+    // todo de-shuffle
+
+    // get global buffer
+
+    unsafe {
+        let data = from_raw_parts_mut(
+            transfer_task.cache.ptr,
+            NONCE_SIZE as usize * transfer_task.cache_size as usize,
+        );
+
+        // simd shabal words unpack + POC Shuffle + scatter nonces into optimised cache
+        // todo par iter cheating
+        // another oouter loop for n
+        // fix multi 16
+        // fix start offset
+
+        for n in (0..transfer_task.local_nonces).step_by(16) {
+            for i in 0..(NUM_SCOOPS * 2) {
+                for j in (0..32).step_by(4) {
+                    for k in 0..MSHABAL512_VECTOR_SIZE {
+                        let data_offset = (((i & 1) * (4095 - (i >> 1)) + ((i + 1) & 1) * (i >> 1))
+                            * SCOOP_SIZE
+                            * transfer_task.cache_size
+                            + (n + k + transfer_task.chunk_offset) * SCOOP_SIZE
+                            + (i & 1) * 32
+                            + j) as usize;
+                        let buffer_offset =
+                            ((i * 32 + j) * MSHABAL512_VECTOR_SIZE + k * 4) as usize;
+                        &data[data_offset..(data_offset + 4)]
+                            .clone_from_slice(&buffer[buffer_offset..(buffer_offset + 4)]);
+                    }
+                }
+            }
+        }
+    }
+    /*
+    for (int i = 0; i < NUM_SCOOPS * 2; i++) {
+        for (int j = 0; j < 32; j += 4) {
+            for (int k = 0; k < MSHABAL512_VECTOR_SIZE; k += 1) {
+            memcpy(&cache[((i & 1) * (4095 - (i >> 1)) + ((i + 1) & 1) * (i >> 1)) *
+                                      SCOOP_SIZE * cache_size +
+                                  (n + k + chunk_offset) * SCOOP_SIZE + (i & 1) * 32 + j],
+                           &buffer[(i * 32 + j) * MSHABAL512_VECTOR_SIZE + k * 4], 4);
+            }
+        }
+    }
+    */
 }
 
 pub fn gpu_hash_and_transfer_to_host(
@@ -404,7 +460,38 @@ pub fn gpu_hash_and_transfer_to_host(
     hasher_task: &GpuTask,
     transfer_task: &GpuTask,
 ) {
-    // todo initiate transfer
+    // todo slice, currently copying empty stuff
+    let mut buffer = if buffer_id == 1 {
+        gpu_context.buffer_host_a.lock().unwrap()
+    } else {
+        gpu_context.buffer_host_b.lock().unwrap()
+    };
+    unsafe {
+        if buffer_id == 1 {
+            //let mut buffer = gpu_context.buffer_host_a.lock().unwrap();
+            core::enqueue_read_buffer(
+                &gpu_context.queue_b,
+                &gpu_context.buffer_gpu_a,
+                false,
+                0,
+                &mut buffer[0..],
+                None::<Event>,
+                None::<&mut Event>,
+            ).unwrap();
+        } else {
+            //let mut buffer = gpu_context.buffer_host_b.lock().unwrap();
+            core::enqueue_read_buffer(
+                &gpu_context.queue_b,
+                &gpu_context.buffer_gpu_b,
+                false,
+                0,
+                &mut buffer[0..],
+                None::<Event>,
+                None::<&mut Event>,
+            ).unwrap();
+        }
+    }
+
     let numeric_id_be: u64 = unsafe { transmute(hasher_task.numeric_id.to_be()) };
 
     let mut start = 0;
@@ -455,9 +542,43 @@ pub fn gpu_hash_and_transfer_to_host(
                 None::<&mut Event>,
             ).unwrap();
         }
-        // todo check if this can be moved out of loop
-        core::finish(&gpu_context.queue_a).unwrap();
+
+
+
+        // todo de-shuffle
     }
+            // todo check if this can be moved out of loop
+        core::finish(&gpu_context.queue_b).unwrap();
+
+        unsafe {
+            let data = from_raw_parts_mut(
+                transfer_task.cache.ptr,
+                NONCE_SIZE as usize * transfer_task.cache_size as usize,
+            );
+
+            for n in (0..transfer_task.local_nonces).step_by(16) {
+                for i in 0..(NUM_SCOOPS * 2) {
+                    for j in (0..32).step_by(4) {
+                        for k in 0..MSHABAL512_VECTOR_SIZE {
+                            let data_offset = (((i & 1) * (4095 - (i >> 1))
+                                + ((i + 1) & 1) * (i >> 1))
+                                * SCOOP_SIZE
+                                * transfer_task.cache_size
+                                + (n + k + transfer_task.chunk_offset) * SCOOP_SIZE
+                                + (i & 1) * 32
+                                + j) as usize;
+                            let buffer_offset =
+                                ((i * 32 + j) * MSHABAL512_VECTOR_SIZE + k * 4) as usize;
+                            &data[data_offset..(data_offset + 4)]
+                                .clone_from_slice(&buffer[buffer_offset..(buffer_offset + 4)]);
+                        }
+                    }
+                }
+            }
+        }
+
+        core::finish(&gpu_context.queue_a).unwrap();
+    
 }
 
 /*
