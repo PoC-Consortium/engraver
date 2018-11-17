@@ -86,12 +86,12 @@ impl Plotter {
         }
 
         #[cfg(feature = "opencl")]
-        let cpu_threads = min(cores, task.cpu_threads as u32);
+        let cpu_threads = min(cores, u32::from(task.cpu_threads));
         #[cfg(not(feature = "opencl"))]
         let cpu_threads = if task.cpu_threads == 0 {
             cores
         } else {
-            min(cores, task.cpu_threads as u32)
+            min(cores, u32::from(task.cpu_threads))
         };
 
         if !task.quiet {
@@ -295,11 +295,11 @@ impl Plotter {
 
         // hi bold! might make this optional in future releases.
         let thread_pinning = true;
-        let mut core_ids: Vec<core_affinity::CoreId> = Vec::new();
-
-        if thread_pinning {
-            core_ids = core_affinity::get_core_ids().unwrap();
-        }
+        let core_ids = if thread_pinning {
+            core_affinity::get_core_ids().unwrap()
+        } else {
+            Vec::new()
+        };
 
         let hasher = thread::spawn({
             create_scheduler_thread(

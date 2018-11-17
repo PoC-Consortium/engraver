@@ -94,8 +94,7 @@ pub fn gpu_show_info(gpus: &Vec<String>) {
             process::exit(0);
         }
         let device = device_ids[gpu_id];
-        match core::get_device_info(&device, DeviceInfo::GlobalMemSize).unwrap()
-        {
+        match core::get_device_info(&device, DeviceInfo::GlobalMemSize).unwrap() {
             core::DeviceInfoResult::GlobalMemSize(mem) => {
                 println!(
                     "GPU: {} - {} [RAM={}MiB, Cores={}]",
@@ -137,7 +136,7 @@ pub fn gpu_init(gpus: &Vec<String>) -> Vec<Arc<GpuContext>> {
             _ => panic!("Unexpected error. Can't obtain GPU memory size."),
         };
 
-        // use max 75% of total gpu mem
+        // use max 25% of total gpu mem
         // todo: user limit
         let num_buffer = 2;
         let max_nonces = ((total_mem / 8 * 2) / (num_buffer * NONCE_SIZE)) as usize;
@@ -548,10 +547,7 @@ pub fn gpu_hash_and_transfer_to_host(
                 None::<&mut Event>,
             ).unwrap();
         }
-
-        // todo de-shuffle
     }
-    // todo check if this can be moved out of loop
     core::finish(&gpu_context.queue_b).unwrap();
 
     unsafe {

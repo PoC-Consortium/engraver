@@ -2,11 +2,6 @@ extern crate pbr;
 extern crate rayon;
 
 use chan;
-use std::sync::mpsc::channel;
-use std::sync::Arc;
-#[cfg(feature = "opencl")]
-use std::thread;
-// todo get rid of this in this mod
 use cpu_hasher::{hash_cpu, CpuTask, SafeCVoid};
 #[cfg(feature = "opencl")]
 use gpu_hasher::{create_gpu_hasher_thread, GpuTask, SafePointer};
@@ -15,11 +10,13 @@ use libc::{c_void, size_t};
 use ocl::gpu_init;
 use plotter::{Buffer, PlotterTask};
 use std::cmp::min;
+use std::sync::mpsc::channel;
+use std::sync::Arc;
+#[cfg(feature = "opencl")]
+use std::thread;
 
 const CPU_TASK_SIZE: u64 = 64;
 const NONCE_SIZE: u64 = (2 << 17);
-
-// todo re-union cpu and gpu task
 
 pub fn create_scheduler_thread(
     task: Arc<PlotterTask>,
@@ -78,7 +75,7 @@ pub fn create_scheduler_thread(
             let mut requested = 0u64;
             let mut processed = 0u64;
 
-            // todo kickoff first gpu and cpu runs
+            // kickoff first gpu and cpu runs
             #[cfg(feature = "opencl")]
             for (i, gpu) in gpus.iter().enumerate() {
                 // schedule next gpu task
