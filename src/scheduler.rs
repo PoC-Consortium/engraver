@@ -4,13 +4,15 @@ extern crate rayon;
 use chan;
 use std::sync::mpsc::channel;
 use std::sync::Arc;
+#[cfg(feature = "opencl")]
 use std::thread;
 // todo get rid of this in this mod
 use cpu_hasher::{hash_cpu, CpuTask, SafeCVoid};
+#[cfg(feature = "opencl")]
 use gpu_hasher::{create_gpu_hasher_thread, GpuTask, SafePointer};
 use libc::{c_void, size_t};
 #[cfg(feature = "opencl")]
-use ocl::GpuContext;
+use ocl::gpu_init;
 use plotter::{Buffer, PlotterTask};
 use std::cmp::min;
 
@@ -27,7 +29,6 @@ pub fn create_scheduler_thread(
     rx_empty_buffers: chan::Receiver<Buffer>,
     tx_buffers_to_writer: chan::Sender<Buffer>,
     simd_ext: String,
-    gpu_contexts: Option<Vec<Arc<GpuContext>>>,
 ) -> impl FnOnce() {
     move || {
         // synchronisation chanel for all hashing devices (CPU+GPU)
@@ -39,14 +40,23 @@ pub fn create_scheduler_thread(
         let (tx, rx) = channel();
 
         // create gpu threads and channels
-        let gpus = match gpu_contexts{
-            Some(x) => x,
-            None => Vec::new()
+        #[cfg(feature = "opencl")]
+        let gpu_contexts = match &task.gpus {
+            Some(x) => Some(gpu_init(&x)),
+            None => None,
         };
 
+        #[cfg(feature = "opencl")]
+        let gpus = match gpu_contexts {
+            Some(x) => x,
+            None => Vec::new(),
+        };
+        #[cfg(feature = "opencl")]
         let mut gpu_threads = Vec::new();
+        #[cfg(feature = "opencl")]
         let mut gpu_channels = Vec::new();
 
+        #[cfg(feature = "opencl")]
         for (i, gpu) in gpus.iter().enumerate() {
             gpu_channels.push(chan::unbounded());
             gpu_threads.push(thread::spawn({
@@ -69,6 +79,7 @@ pub fn create_scheduler_thread(
             let mut processed = 0u64;
 
             // todo kickoff first gpu and cpu runs
+            #[cfg(feature = "opencl")]
             for (i, gpu) in gpus.iter().enumerate() {
                 // schedule next gpu task
                 let task_size = min(gpu.worksize as u64, nonces_to_hash - requested);
@@ -143,10 +154,15 @@ pub fn create_scheduler_thread(
                             }
                             _ => {
                                 // schedule next gpu task
+                                #[cfg(feature = "opencl")]
                                 let task_size = min(
                                     gpus[(msg.0 - 1) as usize].worksize as u64,
                                     nonces_to_hash - requested,
                                 );
+                                #[cfg(not(feature = "opencl"))]
+                                let task_size = 0;
+
+                                #[cfg(feature = "opencl")]
                                 gpu_channels[(msg.0 - 1) as usize].0.send(Some(GpuTask {
                                     cache: SafePointer {
                                         ptr: bs.as_mut_ptr(),
@@ -195,6 +211,7 @@ pub fn create_scheduler_thread(
                     None => (),
                 }
                 // shutdown gpu threads
+                #[cfg(feature = "opencl")]
                 for gpu in gpu_channels.iter() {
                     gpu.0.send(None);
                 }

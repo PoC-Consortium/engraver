@@ -10,7 +10,7 @@ use self::raw_cpuid::CpuId;
 use chan;
 use core_affinity;
 #[cfg(feature = "opencl")]
-use ocl::gpu_init;
+use ocl::gpu_show_info;
 use scheduler::create_scheduler_thread;
 use std::cmp::{max, min};
 use std::path::Path;
@@ -106,16 +106,23 @@ impl Plotter {
         }
 
         #[cfg(feature = "opencl")]
-        let gpu_contexts = match &task.gpus {
-            Some(x) => Some(gpu_init(&x, task.quiet)),
-            None => None,
-        };
+        match &task.gpus {
+            Some(x) => if !task.quiet {
+                gpu_show_info(&x)
+            },
+            None => (),
+        }
 
         // use all avaiblable disk space if nonce parameter has been omitted
         let free_disk_space = free_disk_space(&task.output_path);
         if task.nonces == 0 {
             task.nonces = free_disk_space / NONCE_SIZE;
         }
+
+        let gpu = match &task.gpus {
+            Some(_) => true,
+            None => false,
+        };
 
         // align number of nonces with sector size if direct i/o
         let mut rounded_nonces_to_sector_size = false;
@@ -127,7 +134,11 @@ impl Plotter {
             // opencl requires buffer to be a multiple of 16 (data coalescence magic)
             // todo remove and make all multiples work
             #[cfg(feature = "opencl")]
-            let nonces_per_sector = max(16, nonces_per_sector);
+            let nonces_per_sector = if gpu {
+                max(16, nonces_per_sector)
+            } else {
+                nonces_per_sector
+            };
             if task.nonces % nonces_per_sector > 0 {
                 rounded_nonces_to_sector_size = true;
                 task.nonces /= nonces_per_sector;
@@ -163,7 +174,7 @@ impl Plotter {
         }
 
         // calculate memory usage
-        let mem = match calculate_mem_to_use(&task, &memory, nonces_per_sector) {
+        let mem = match calculate_mem_to_use(&task, &memory, nonces_per_sector, gpu) {
             Ok(x) => x,
             Err(_) => return,
         };
@@ -311,7 +322,6 @@ impl Plotter {
                 rx_empty_buffers.clone(),
                 tx_full_buffers.clone(),
                 simd_ext,
-                gpu_contexts,
             )
         });
 
@@ -354,6 +364,7 @@ fn calculate_mem_to_use(
     task: &PlotterTask,
     memory: &sys_info::MemInfo,
     nonces_per_sector: u64,
+    gpu: bool,
 ) -> Result<u64, &'static str> {
     let plotsize = task.nonces * NONCE_SIZE;
 
@@ -378,8 +389,11 @@ fn calculate_mem_to_use(
     mem = min(mem, plotsize);
 
     // opencl requires buffer to be a multiple of 16 (data coalescence magic)
-    #[cfg(feature = "opencl")]
-    let nonces_per_sector = max(16, nonces_per_sector);
+    let nonces_per_sector = if gpu {
+        max(16, nonces_per_sector)
+    } else {
+        nonces_per_sector
+    };
 
     // don't exceed free memory and leave some elbow room 1-1000/1024
     mem = min(mem, memory.free * 1000);

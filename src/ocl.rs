@@ -74,7 +74,43 @@ pub struct GpuContext {
     pub worksize: usize,
 }
 
-pub fn gpu_init(gpus: &Vec<String>, quiet: bool) -> Vec<Arc<GpuContext>> {
+pub fn gpu_show_info(gpus: &Vec<String>) {
+    for gpu in gpus.iter() {
+        let gpu = gpu.split(":").collect::<Vec<&str>>();
+        let platform_id = gpu[0].parse::<usize>().unwrap();
+        let gpu_id = gpu[1].parse::<usize>().unwrap();
+
+        let platform_ids = core::get_platform_ids().unwrap();
+        if platform_id >= platform_ids.len() {
+            println!("Error: Selected OpenCL platform doesn't exist.");
+            println!("Shutting down...");
+            process::exit(0);
+        }
+        let platform = platform_ids[platform_id];
+        let device_ids = core::get_device_ids(&platform, None, None).unwrap();
+        if gpu_id >= device_ids.len() {
+            println!("Error: Selected OpenCL device doesn't exist");
+            println!("Shutting down...");
+            process::exit(0);
+        }
+        let device = device_ids[gpu_id];
+        match core::get_device_info(&device, DeviceInfo::GlobalMemSize).unwrap()
+        {
+            core::DeviceInfoResult::GlobalMemSize(mem) => {
+                println!(
+                    "GPU: {} - {} [RAM={}MiB, Cores={}]",
+                    to_string!(core::get_device_info(&device, DeviceInfo::Vendor)),
+                    to_string!(core::get_device_info(&device, DeviceInfo::Name)),
+                    mem / 1024 / 1024,
+                    to_string!(core::get_device_info(&device, DeviceInfo::MaxComputeUnits))
+                );
+            }
+            _ => panic!("Unexpected error. Can't obtain GPU memory size."),
+        }
+    }
+}
+
+pub fn gpu_init(gpus: &Vec<String>) -> Vec<Arc<GpuContext>> {
     let mut result = Vec::new();
     for gpu in gpus.iter() {
         let gpu = gpu.split(":").collect::<Vec<&str>>();
@@ -97,18 +133,7 @@ pub fn gpu_init(gpus: &Vec<String>, quiet: bool) -> Vec<Arc<GpuContext>> {
         let device = device_ids[gpu_id];
         let mut total_mem = match core::get_device_info(&device, DeviceInfo::GlobalMemSize).unwrap()
         {
-            core::DeviceInfoResult::GlobalMemSize(mem) => {
-                if !quiet {
-                    println!(
-                        "GPU: {} - {} [RAM={}MiB, Cores={}]",
-                        to_string!(core::get_device_info(&device, DeviceInfo::Vendor)),
-                        to_string!(core::get_device_info(&device, DeviceInfo::Name)),
-                        mem / 1024 / 1024,
-                        to_string!(core::get_device_info(&device, DeviceInfo::MaxComputeUnits))
-                    );
-                }
-                mem
-            }
+            core::DeviceInfoResult::GlobalMemSize(mem) => mem,
             _ => panic!("Unexpected error. Can't obtain GPU memory size."),
         };
 
@@ -159,18 +184,14 @@ impl GpuContext {
 
         let kernel_workgroup_size = get_kernel_work_group_size(&kernel, device_id);
 
-        println!("Debug: max_nonces_per_cache={}", max_nonces_per_cache);
         let workgroup_count = max_nonces_per_cache / kernel_workgroup_size;
 
         let worksize = kernel_workgroup_size * workgroup_count;
-
-        println!("Debug: worksize={}", worksize);
 
         let gdim1 = [worksize, 1, 1];
         let ldim1 = [kernel_workgroup_size, 1, 1];
 
         // create buffer
-        print!("Debug: Creating Buffer...");
         let buffer_gpu_a = unsafe {
             core::create_buffer::<_, u8>(
                 &context,
@@ -191,7 +212,6 @@ impl GpuContext {
         let buffer_host_a = vec![1u8; (NONCE_SIZE as usize) * worksize as usize];
         let buffer_host_b = vec![1u8; (NONCE_SIZE as usize) * worksize as usize];
 
-        println!("OK");
         GpuContext {
             queue_a,
             queue_b,

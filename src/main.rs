@@ -10,6 +10,7 @@ extern crate stopwatch;
 extern crate sys_info;
 
 mod cpu_hasher;
+#[cfg(feature = "opencl")]
 mod gpu_hasher;
 #[cfg(feature = "opencl")]
 mod ocl;
