@@ -39,9 +39,14 @@ pub fn create_scheduler_thread(
         let (tx, rx) = channel();
 
         // create gpu threads and channels
-        let gpus = gpu_contexts.unwrap();
+        let gpus = match gpu_contexts{
+            Some(x) => x,
+            None => Vec::new()
+        };
+
         let mut gpu_threads = Vec::new();
         let mut gpu_channels = Vec::new();
+
         for (i, gpu) in gpus.iter().enumerate() {
             gpu_channels.push(chan::unbounded());
             gpu_threads.push(thread::spawn({
