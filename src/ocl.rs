@@ -153,7 +153,6 @@ pub fn gpu_init(gpus: &Vec<String>) -> Vec<Arc<GpuContext>> {
 
 // Ohne Gummi im Bahnhofsviertel... das wird noch Konsequenzen haben
 unsafe impl Sync for GpuContext {}
-//unsafe impl Send for GpuBuffer {}
 
 impl GpuContext {
     pub fn new(
@@ -256,7 +255,6 @@ impl Buffer for GpuBuffer {
  
 */
 
-// todo limit kernel to nonce nb
 // first run
 pub fn gpu_hash(gpu_context: &GpuContext, task: &GpuTask) {
     let numeric_id_be: u64 = unsafe { transmute(task.numeric_id.to_be()) };
@@ -306,8 +304,7 @@ pub fn gpu_hash(gpu_context: &GpuContext, task: &GpuTask) {
             ).unwrap();
         }
     }
-            core::finish(&gpu_context.queue_a).unwrap();
-
+    core::finish(&gpu_context.queue_a).unwrap();
 }
 
 pub fn gpu_transfer_to_host(gpu_context: &GpuContext, buffer_id: u8, transfer_task: &GpuTask) {
@@ -341,22 +338,13 @@ pub fn gpu_transfer_to_host(gpu_context: &GpuContext, buffer_id: u8, transfer_ta
         }
     }
 
-    // todo de-shuffle
-
-    // get global buffer
-
+    // simd shabal words unpack + POC Shuffle + scatter nonces into optimised cache
+    // todo allow any multiple of nonces, not only x16
     unsafe {
-        // simd shabal words unpack + POC Shuffle + scatter nonces into optimised cache
-        // todo par iter cheating
-        // another oouter loop for n
-        // fix multi 16
-        // fix start offset
-
         let iter: Vec<u64> = (0..transfer_task.local_nonces).step_by(16).collect();
-        //let cache_size = transfer_task.cache_size;
-        //let chunk_offset = transfer_task.chunk_offset;
 
         iter.par_iter().for_each(|n| {
+            // get global buffer
             let data = from_raw_parts_mut(
                 transfer_task.cache.ptr,
                 NONCE_SIZE as usize * transfer_task.cache_size as usize,
@@ -390,7 +378,6 @@ pub fn gpu_hash_and_transfer_to_host(
     hasher_task: &GpuTask,
     transfer_task: &GpuTask,
 ) {
-    // todo slice, currently copying empty stuff
     let mut buffer = if buffer_id == 1 {
         gpu_context.buffer_host_a.lock().unwrap()
     } else {
@@ -398,7 +385,6 @@ pub fn gpu_hash_and_transfer_to_host(
     };
     unsafe {
         if buffer_id == 1 {
-            //let mut buffer = gpu_context.buffer_host_a.lock().unwrap();
             core::enqueue_read_buffer(
                 &gpu_context.queue_b,
                 &gpu_context.buffer_gpu_a,
@@ -409,7 +395,6 @@ pub fn gpu_hash_and_transfer_to_host(
                 None::<&mut Event>,
             ).unwrap();
         } else {
-            //let mut buffer = gpu_context.buffer_host_b.lock().unwrap();
             core::enqueue_read_buffer(
                 &gpu_context.queue_b,
                 &gpu_context.buffer_gpu_b,
@@ -475,18 +460,13 @@ pub fn gpu_hash_and_transfer_to_host(
     }
     core::finish(&gpu_context.queue_b).unwrap();
 
+    // simd shabal words unpack + POC Shuffle + scatter nonces into optimised cache
+    // todo remove duplicate code parts
     unsafe {
-        // simd shabal words unpack + POC Shuffle + scatter nonces into optimised cache
-        // todo par iter cheating
-        // another oouter loop for n
-        // fix multi 16
-        // fix start offset
-
         let iter: Vec<u64> = (0..transfer_task.local_nonces).step_by(16).collect();
-        //let cache_size = transfer_task.cache_size;
-        //let chunk_offset = transfer_task.chunk_offset;
 
         iter.par_iter().for_each(|n| {
+            // get global buffer
             let data = from_raw_parts_mut(
                 transfer_task.cache.ptr,
                 NONCE_SIZE as usize * transfer_task.cache_size as usize,
