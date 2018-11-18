@@ -208,7 +208,7 @@ fn main() {
 
     let gpus = if matches.occurrences_of("gpu") > 0 {
         let gpu = values_t!(matches, "gpu", String).unwrap_or(Vec::new());
-        if gpu.is_empty() {
+        if !gpu.is_empty() {
             Some(gpu)
         } else {
             None

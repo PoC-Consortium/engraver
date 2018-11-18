@@ -7,6 +7,7 @@ pub struct SafePointer {
     pub ptr: *mut u8,
 }
 unsafe impl Send for SafePointer {}
+unsafe impl Sync for SafePointer {}
 
 pub struct GpuTask {
     pub cache: SafePointer,

@@ -1,6 +1,5 @@
-extern crate aligned_alloc;
 extern crate ocl_core as core;
-extern crate page_size;
+extern crate rayon;
 
 use self::core::{
     ArgVal, ContextProperties, DeviceInfo, Event, KernelWorkGroupInfo, PlatformInfo, Status,
@@ -20,6 +19,8 @@ use std::slice::from_raw_parts_mut;
 
 use std::mem::transmute;
 use std::process;
+
+use ocl::rayon::prelude::*;
 
 use std::sync::{Arc, Mutex};
 use std::u64;
@@ -227,80 +228,9 @@ impl GpuContext {
     }
 }
 /*
-pub struct GpuBuffer {
-    data: Arc<Mutex<Vec<u8>>>,
-    context: Arc<Mutex<GpuContext>>,
-    gensig_gpu: core::Mem,
-    data_gpu: core::Mem,
-    deadlines_gpu: core::Mem,
-    best_deadline_gpu: core::Mem,
-    best_offset_gpu: core::Mem,
-    memmap: Option<Arc<core::MemMap<u8>>>,
-}
-
-impl GpuBuffer {
-    pub fn new(context_mu: &Arc<Mutex<GpuContext>>) -> Self
-    where
-        Self: Sized,
-    {
-        let context = context_mu.lock().unwrap();
-
-        let gensig_gpu = unsafe {
-            core::create_buffer::<_, u8>(&context.context, core::MEM_READ_ONLY, 32, None).unwrap()
-        };
-
-        let deadlines_gpu = unsafe {
-            core::create_buffer::<_, u64>(
-                &context.context,
-                core::MEM_READ_WRITE,
-                context.gdim1[0],
-                None,
-            ).unwrap()
-        };
-
-        let best_offset_gpu = unsafe {
-            core::create_buffer::<_, u64>(&context.context, core::MEM_READ_WRITE, 1, None).unwrap()
-        };
-
-        let best_deadline_gpu = unsafe {
-            core::create_buffer::<_, u64>(&context.context, core::MEM_READ_WRITE, 1, None).unwrap()
-        };
-
-        let pointer = aligned_alloc::aligned_alloc(&context.gdim1[0] * 64, page_size::get());
-        let data: Vec<u8>;
-        unsafe {
-            data = Vec::from_raw_parts(
-                pointer as *mut u8,
-                &context.gdim1[0] * 64,
-                &context.gdim1[0] * 64,
-            );
-        }
-
-        let data_gpu = unsafe {
-            core::create_buffer(
-                &context.context,
-                core::MEM_READ_ONLY | core::MEM_USE_HOST_PTR,
-                context.gdim1[0] * 64,
-                Some(&data),
-            ).unwrap()
-        };
-
-        GpuBuffer {
-            data: Arc::new(Mutex::new(data)),
-            context: context_mu.clone(),
-            gensig_gpu,
-            data_gpu,
-            deadlines_gpu,
-            best_deadline_gpu,
-            best_offset_gpu,
-            memmap: None,
-        }
-    }
-    /*
-}
+memmap: Option<Arc<core::MemMap<u8>>>,
 
 impl Buffer for GpuBuffer {
-    */
     fn get_buffer_for_writing(&mut self) -> Arc<Mutex<Vec<u8>>> {
         // pointer is cached, however, calling enqueue map to make DMA work.
         let locked_context = self.context.lock().unwrap();
@@ -323,17 +253,7 @@ impl Buffer for GpuBuffer {
         self.data.clone()
     }
 
-    fn get_buffer(&mut self) -> Arc<Mutex<Vec<u8>>> {
-        self.data.clone()
-    }
-
-    fn get_gpu_context(&self) -> Option<Arc<Mutex<GpuContext>>> {
-        Some(self.context.clone())
-    }
-    fn get_gpu_buffers(&self) -> Option<&GpuBuffer> {
-        Some(self)
-    }
-}
+ 
 */
 
 // todo limit kernel to nonce nb
@@ -385,9 +305,9 @@ pub fn gpu_hash(gpu_context: &GpuContext, task: &GpuTask) {
                 None::<&mut Event>,
             ).unwrap();
         }
-        // todo check if this can be moved out of loop
-        core::finish(&gpu_context.queue_a).unwrap();
     }
+            core::finish(&gpu_context.queue_a).unwrap();
+
 }
 
 pub fn gpu_transfer_to_host(gpu_context: &GpuContext, buffer_id: u8, transfer_task: &GpuTask) {
@@ -426,28 +346,33 @@ pub fn gpu_transfer_to_host(gpu_context: &GpuContext, buffer_id: u8, transfer_ta
     // get global buffer
 
     unsafe {
-        let data = from_raw_parts_mut(
-            transfer_task.cache.ptr,
-            NONCE_SIZE as usize * transfer_task.cache_size as usize,
-        );
-
         // simd shabal words unpack + POC Shuffle + scatter nonces into optimised cache
         // todo par iter cheating
         // another oouter loop for n
         // fix multi 16
         // fix start offset
 
-        for n in (0..transfer_task.local_nonces).step_by(16) {
+        let iter: Vec<u64> = (0..transfer_task.local_nonces).step_by(16).collect();
+        //let cache_size = transfer_task.cache_size;
+        //let chunk_offset = transfer_task.chunk_offset;
+
+        iter.par_iter().for_each(|n| {
+            let data = from_raw_parts_mut(
+                transfer_task.cache.ptr,
+                NONCE_SIZE as usize * transfer_task.cache_size as usize,
+            );
+
             for i in 0..(NUM_SCOOPS * 2) {
                 for j in (0..32).step_by(4) {
                     for k in 0..MSHABAL512_VECTOR_SIZE {
                         let data_offset = (((i & 1) * (4095 - (i >> 1)) + ((i + 1) & 1) * (i >> 1))
                             * SCOOP_SIZE
                             * transfer_task.cache_size
-                            + (n + k + transfer_task.chunk_offset) * SCOOP_SIZE
+                            + (*n + k + transfer_task.chunk_offset) * SCOOP_SIZE
                             + (i & 1) * 32
                             + j) as usize;
-                        let buffer_offset = (n * NONCE_SIZE
+
+                        let buffer_offset = (*n * NONCE_SIZE
                             + (i * 32 + j) * MSHABAL512_VECTOR_SIZE
                             + k * 4) as usize;
                         &data[data_offset..(data_offset + 4)]
@@ -455,7 +380,7 @@ pub fn gpu_transfer_to_host(gpu_context: &GpuContext, buffer_id: u8, transfer_ta
                     }
                 }
             }
-        }
+        })
     }
 }
 
@@ -551,22 +476,33 @@ pub fn gpu_hash_and_transfer_to_host(
     core::finish(&gpu_context.queue_b).unwrap();
 
     unsafe {
-        let data = from_raw_parts_mut(
-            transfer_task.cache.ptr,
-            NONCE_SIZE as usize * transfer_task.cache_size as usize,
-        );
+        // simd shabal words unpack + POC Shuffle + scatter nonces into optimised cache
+        // todo par iter cheating
+        // another oouter loop for n
+        // fix multi 16
+        // fix start offset
 
-        for n in (0..transfer_task.local_nonces).step_by(16) {
+        let iter: Vec<u64> = (0..transfer_task.local_nonces).step_by(16).collect();
+        //let cache_size = transfer_task.cache_size;
+        //let chunk_offset = transfer_task.chunk_offset;
+
+        iter.par_iter().for_each(|n| {
+            let data = from_raw_parts_mut(
+                transfer_task.cache.ptr,
+                NONCE_SIZE as usize * transfer_task.cache_size as usize,
+            );
+
             for i in 0..(NUM_SCOOPS * 2) {
                 for j in (0..32).step_by(4) {
                     for k in 0..MSHABAL512_VECTOR_SIZE {
                         let data_offset = (((i & 1) * (4095 - (i >> 1)) + ((i + 1) & 1) * (i >> 1))
                             * SCOOP_SIZE
                             * transfer_task.cache_size
-                            + (n + k + transfer_task.chunk_offset) * SCOOP_SIZE
+                            + (*n + k + transfer_task.chunk_offset) * SCOOP_SIZE
                             + (i & 1) * 32
                             + j) as usize;
-                        let buffer_offset = (n * NONCE_SIZE
+
+                        let buffer_offset = (*n * NONCE_SIZE
                             + (i * 32 + j) * MSHABAL512_VECTOR_SIZE
                             + k * 4) as usize;
                         &data[data_offset..(data_offset + 4)]
@@ -574,158 +510,13 @@ pub fn gpu_hash_and_transfer_to_host(
                     }
                 }
             }
-        }
+        })
     }
 
     core::finish(&gpu_context.queue_a).unwrap();
 }
 
 /*
-pub fn noncegen_gpu(
-    cache: *mut u8,
-    cache_size: u64,
-    chunk_offset: u64,
-    numeric_id: u64,
-    local_startnonce: u64,
-    local_nonces: u64,
-    gpu_context: Arc<GpuContext>,
-) {
-    // to be changed!
-/*
-    unsafe {
-       let data = from_raw_parts(cache,  NONCE_SIZE as usize * cache_size as usize);
-    }
-*/
-    let numeric_id_be: u64 = unsafe { transmute(numeric_id.to_be()) };
-
-    //let gpu_context = GpuContext::new(0, 0, local_nonces as usize, false);
-
-    //let data_gpu = unsafe {
-    //    core::create_buffer::<_, u8>(&gpu_context.context, core::MEM_READ_WRITE, (NONCE_SIZE * 1024) as usize, None).unwrap()
-    //};
-
-    let hashes_per_run: usize = 32;
-    let mut start = 0;
-    let mut end = 0;
-
-    core::set_kernel_arg(
-        &gpu_context.kernel,
-        0,
-        ArgVal::mem(&gpu_context.buffer_gpu_a),
-    ).unwrap();
-    core::set_kernel_arg(
-        &gpu_context.kernel,
-        1,
-        ArgVal::primitive(&local_startnonce),
-    ).unwrap();
-    core::set_kernel_arg(&gpu_context.kernel, 2, ArgVal::primitive(&numeric_id_be)).unwrap();
-
-    for i in (0..8192).step_by(hashes_per_run) {
-        if i + hashes_per_run < 8192 {
-            start = i;
-            end = i + hashes_per_run - 1;
-        } else {
-            start = i;
-            end = i + hashes_per_run;
-        }
-
-        core::set_kernel_arg(&gpu_context.kernel, 3, ArgVal::primitive(&(start as i32))).unwrap();
-        core::set_kernel_arg(&gpu_context.kernel, 4, ArgVal::primitive(&(end as i32))).unwrap();
-
-        unsafe {
-            core::enqueue_kernel(
-                &gpu_context.queue,
-                &gpu_context.kernel,
-                1,
-                None,
-                &gpu_context.gdim1,
-                Some(gpu_context.ldim1),
-                None::<Event>,
-                None::<&mut Event>,
-            ).unwrap();
-        }
-        core::finish(&gpu_context.queue).unwrap();
-    }
-    return;
-
-    core::set_kernel_arg(
-        &gpu_context.kernel,
-        0,
-        ArgVal::mem(&gpu_context.buffer_gpu_a),
-    ).unwrap();
-    core::set_kernel_arg(
-        &gpu_context.kernel,
-        1,
-        ArgVal::primitive(&local_startnonce),
-    ).unwrap();
-    core::set_kernel_arg(&gpu_context.kernel, 2, ArgVal::primitive(&numeric_id_be)).unwrap();
-
-    unsafe {
-        core::enqueue_kernel(
-            &gpu_context.queue,
-            &gpu_context.kernel,
-            1,
-            None,
-            &gpu_context.gdim1,
-            Some(gpu_context.ldim1),
-            None::<Event>,
-            None::<&mut Event>,
-        ).unwrap();
-    }
-    core::finish(&gpu_context.queue).unwrap();
-
-    
-    let mut datax = vec![1u8;  (NONCE_SIZE * local_nonces) as usize];
-    //let mut datax =  &gpu_context.buffer_host_a.lock().unwrap();
-    unsafe {
-        core::enqueue_read_buffer(
-            &gpu_context.queue,
-            &gpu_context.buffer_gpu_a,
-            true,
-            0,
-            &mut datax[0..],
-            None::<Event>,
-            None::<&mut Event>,
-        ).unwrap();
-    }
-    
-
-       
-
-    core::set_kernel_arg(&gpu_context.kernel1, 0, ArgVal::mem(&buffer.gensig_gpu)).unwrap();
-    core::set_kernel_arg(&gpu_context.kernel1, 1, ArgVal::mem(&buffer.data_gpu)).unwrap();
-    core::set_kernel_arg(&gpu_context.kernel1, 2, ArgVal::mem(&buffer.deadlines_gpu)).unwrap();
-
-    unsafe {
-        core::enqueue_kernel(
-            &gpu_context.queue,
-            &gpu_context.kernel1,
-            1,
-            None,
-            &gpu_context.gdim1,
-            Some(gpu_context.ldim1),
-            None::<Event>,
-            None::<&mut Event>,
-        ).unwrap();
-    }
-
- return;
-      
-    let gpu_context_mtx = (*buffer).get_gpu_context().unwrap();
-    let gpu_context = gpu_context_mtx.lock().unwrap();
-
-    unsafe {
-        core::enqueue_write_buffer(
-            &gpu_context.queue,
-            &buffer.gensig_gpu,
-            false,
-            0,
-            &gensig,
-            None::<Event>,
-            None::<&mut Event>,
-        ).unwrap();
-    }
-
     if gpu_context.mapping {
         let temp = buffer.memmap.clone();
         let temp2 = temp.unwrap();
@@ -748,84 +539,9 @@ pub fn noncegen_gpu(
                 None::<&mut Event>,
             ).unwrap();
         }
-    }
-
-    core::set_kernel_arg(&gpu_context.kernel1, 0, ArgVal::mem(&buffer.gensig_gpu)).unwrap();
-    core::set_kernel_arg(&gpu_context.kernel1, 1, ArgVal::mem(&buffer.data_gpu)).unwrap();
-    core::set_kernel_arg(&gpu_context.kernel1, 2, ArgVal::mem(&buffer.deadlines_gpu)).unwrap();
-
-    unsafe {
-        core::enqueue_kernel(
-            &gpu_context.queue,
-            &gpu_context.kernel1,
-            1,
-            None,
-            &gpu_context.gdim1,
-            Some(gpu_context.ldim1),
-            None::<Event>,
-            None::<&mut Event>,
-        ).unwrap();
-    }
-
-    core::set_kernel_arg(&gpu_context.kernel2, 0, ArgVal::mem(&buffer.deadlines_gpu)).unwrap();
-    core::set_kernel_arg(&gpu_context.kernel2, 1, ArgVal::primitive(&nonce_count)).unwrap();
-    core::set_kernel_arg(
-        &gpu_context.kernel2,
-        2,
-        ArgVal::local::<u32>(&gpu_context.ldim2[0]),
-    ).unwrap();
-    core::set_kernel_arg(
-        &gpu_context.kernel2,
-        3,
-        ArgVal::mem(&buffer.best_offset_gpu),
-    ).unwrap();
-    core::set_kernel_arg(
-        &gpu_context.kernel2,
-        4,
-        ArgVal::mem(&buffer.best_deadline_gpu),
-    ).unwrap();
-
-    unsafe {
-        core::enqueue_kernel(
-            &gpu_context.queue,
-            &gpu_context.kernel2,
-            1,
-            None,
-            &gpu_context.gdim2,
-            Some(gpu_context.ldim2),
-            None::<Event>,
-            None::<&mut Event>,
-        ).unwrap();
-    }
-
-    let mut best_offset = vec![0u64; 1];
-    let mut best_deadline = vec![0u64; 1];
-
-    unsafe {
-        core::enqueue_read_buffer(
-            &gpu_context.queue,
-            &buffer.best_offset_gpu,
-            true,
-            0,
-            &mut best_offset,
-            None::<Event>,
-            None::<&mut Event>,
-        ).unwrap();
-    }
-    unsafe {
-        core::enqueue_read_buffer(
-            &gpu_context.queue,
-            &buffer.best_deadline_gpu,
-            true,
-            0,
-            &mut best_deadline,
-            None::<Event>,
-            None::<&mut Event>,
-        ).unwrap();
-    }
-    
-}
+    } 
 */
+
 fn get_kernel_work_group_size(x: &core::Kernel, y: core::DeviceId) -> usize {
     match core::get_kernel_work_group_info(x, y, KernelWorkGroupInfo::WorkGroupSize).unwrap() {
         core::KernelWorkGroupInfoResult::WorkGroupSize(kws) => kws,
