@@ -79,6 +79,7 @@ pub fn create_scheduler_thread(
             #[cfg(feature = "opencl")]
             for (i, gpu) in gpus.iter().enumerate() {
                 // schedule next gpu task
+                let mut gpu = gpu.lock().unwrap();
                 let task_size = min(gpu.worksize as u64, nonces_to_hash - requested);
                 if task_size > 0 {
                     gpu_channels[i].0.send(Some(GpuTask {
@@ -152,10 +153,10 @@ pub fn create_scheduler_thread(
                             _ => {
                                 // schedule next gpu task
                                 #[cfg(feature = "opencl")]
-                                let task_size = min(
-                                    gpus[(msg.0 - 1) as usize].worksize as u64,
-                                    nonces_to_hash - requested,
-                                );
+                                let mut gpu = gpus[(msg.0 - 1) as usize].lock().unwrap();
+                                #[cfg(feature = "opencl")]
+                                let task_size =
+                                    min(gpu.worksize as u64, nonces_to_hash - requested);
                                 #[cfg(not(feature = "opencl"))]
                                 let task_size = 0;
 

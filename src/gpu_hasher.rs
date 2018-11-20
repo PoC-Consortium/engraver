@@ -1,7 +1,7 @@
 use chan::Receiver;
 use ocl::{gpu_hash, gpu_hash_and_transfer_to_host, gpu_transfer_to_host, GpuContext};
 use std::sync::mpsc::Sender;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 pub struct SafePointer {
     pub ptr: *mut u8,
@@ -20,7 +20,7 @@ pub struct GpuTask {
 
 pub fn create_gpu_hasher_thread(
     gpu_id: u8,
-    gpu_context: Arc<GpuContext>,
+    gpu_context: Arc<Mutex<GpuContext>>,
     tx: Sender<(u8, u8, u64)>,
     rx_hasher_task: Receiver<Option<GpuTask>>,
 ) -> impl FnOnce() {
@@ -44,7 +44,7 @@ pub fn create_gpu_hasher_thread(
                     if first_run {
                         if task.local_nonces != 0 {
                             first_run = false;
-                            gpu_hash(&gpu_context, &task);
+                            gpu_hash(gpu_context.clone(), &task);
                             buffer_id = 1 - buffer_id;
                             last_task = task;
                             tx.send((gpu_id, 1u8, 0))
@@ -53,7 +53,7 @@ pub fn create_gpu_hasher_thread(
                     } else {
                         // last run - just transfer
                         if task.local_nonces == 0 {
-                            gpu_transfer_to_host(&gpu_context, buffer_id, &last_task);
+                            gpu_transfer_to_host(gpu_context.clone(), buffer_id, &last_task);
                             first_run = true;
                             buffer_id = 0;
                             tx.send((gpu_id, 0u8, last_task.local_nonces))
@@ -61,7 +61,7 @@ pub fn create_gpu_hasher_thread(
                         // normal run - hash and transfer async
                         } else {
                             gpu_hash_and_transfer_to_host(
-                                &gpu_context,
+                                gpu_context.clone(),
                                 buffer_id,
                                 &task,
                                 &last_task,

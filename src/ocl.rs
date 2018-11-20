@@ -15,7 +15,7 @@ const SCOOP_SIZE: u64 = 64;
 
 //use config::Cfg;
 use std::ffi::CString;
-use std::slice::from_raw_parts_mut;
+use std::slice::{from_raw_parts, from_raw_parts_mut};
 
 use std::mem::transmute;
 use std::process;
@@ -68,8 +68,10 @@ pub struct GpuContext {
     ldim1: [usize; 3],
     gdim1: [usize; 3],
     mapping: bool,
-    buffer_host_a: Arc<Mutex<Vec<u8>>>,
-    buffer_host_b: Arc<Mutex<Vec<u8>>>,
+    buffer_host_a: Option<core::Mem>,
+    buffer_host_b: Option<core::Mem>,
+    buffer_ptr_host_a: Option<core::MemMap<u8>>,
+    buffer_ptr_host_b: Option<core::MemMap<u8>>,
     buffer_gpu_a: core::Mem,
     buffer_gpu_b: core::Mem,
     pub worksize: usize,
@@ -110,7 +112,7 @@ pub fn gpu_show_info(gpus: &Vec<String>) {
     }
 }
 
-pub fn gpu_init(gpus: &Vec<String>) -> Vec<Arc<GpuContext>> {
+pub fn gpu_init(gpus: &Vec<String>) -> Vec<Arc<Mutex<GpuContext>>> {
     let mut result = Vec::new();
     for gpu in gpus.iter() {
         let gpu = gpu.split(":").collect::<Vec<&str>>();
@@ -137,16 +139,18 @@ pub fn gpu_init(gpus: &Vec<String>) -> Vec<Arc<GpuContext>> {
             _ => panic!("Unexpected error. Can't obtain GPU memory size."),
         };
 
+        // Hello again!
+        let gpu_mapping = true;
         // use max 25% of total gpu mem
         // todo: user limit
         let num_buffer = 2;
         let max_nonces = ((total_mem / 8 * 2) / (num_buffer * NONCE_SIZE)) as usize;
-        result.push(Arc::new(GpuContext::new(
+        result.push(Arc::new(Mutex::new(GpuContext::new(
             platform_id,
             gpu_id,
             max_nonces,
-            false,
-        )));
+            gpu_mapping,
+        ))));
     }
     result
 }
@@ -190,77 +194,141 @@ impl GpuContext {
         let gdim1 = [worksize, 1, 1];
         let ldim1 = [kernel_workgroup_size, 1, 1];
 
-        // create buffer
-        let buffer_gpu_a = unsafe {
-            core::create_buffer::<_, u8>(
-                &context,
-                core::MEM_READ_WRITE,
-                (NONCE_SIZE as usize) * worksize,
-                None,
-            ).unwrap()
-        };
-        let buffer_gpu_b = unsafe {
-            core::create_buffer::<_, u8>(
-                &context,
-                core::MEM_READ_WRITE,
-                (NONCE_SIZE as usize) * worksize,
-                None,
-            ).unwrap()
-        };
+        // create buffers
+        // mapping = zero copy buffers, no mapping = pinned memory for fast DMA.
+        if mapping {
+            let buffer_gpu_a = unsafe {
+                core::create_buffer::<_, u8>(
+                    &context,
+                    core::MEM_READ_WRITE | core::MEM_ALLOC_HOST_PTR,
+                    (NONCE_SIZE as usize) * worksize,
+                    None,
+                ).unwrap()
+            };
 
-        let buffer_host_a = vec![1u8; (NONCE_SIZE as usize) * worksize as usize];
-        let buffer_host_b = vec![1u8; (NONCE_SIZE as usize) * worksize as usize];
+            let buffer_gpu_b = unsafe {
+                core::create_buffer::<_, u8>(
+                    &context,
+                    core::MEM_READ_WRITE | core::MEM_ALLOC_HOST_PTR,
+                    (NONCE_SIZE as usize) * worksize,
+                    None,
+                ).unwrap()
+            };
 
-        GpuContext {
-            queue_a,
-            queue_b,
-            kernel,
-            ldim1,
-            gdim1,
-            mapping,
-            buffer_gpu_a,
-            buffer_gpu_b,
-            buffer_host_a: Arc::new(Mutex::new(buffer_host_a)),
-            buffer_host_b: Arc::new(Mutex::new(buffer_host_b)),
-            worksize,
-        }
-    }
-}
-/*
-memmap: Option<Arc<core::MemMap<u8>>>,
+            //let buffer_host_a = vec![1u8; (NONCE_SIZE as usize) * worksize as usize];
+            //let buffer_host_b = vec![1u8; (NONCE_SIZE as usize) * worksize as usize];
 
-impl Buffer for GpuBuffer {
-    fn get_buffer_for_writing(&mut self) -> Arc<Mutex<Vec<u8>>> {
-        // pointer is cached, however, calling enqueue map to make DMA work.
-        let locked_context = self.context.lock().unwrap();
-        if locked_context.mapping {
-            unsafe {
-                self.memmap = Some(Arc::new(
+            GpuContext {
+                queue_a,
+                queue_b,
+                kernel,
+                ldim1,
+                gdim1,
+                mapping,
+                buffer_gpu_a,
+                buffer_gpu_b,
+                buffer_host_a: None,
+                buffer_host_b: None,
+                buffer_ptr_host_a: None,
+                buffer_ptr_host_b: None,
+                worksize,
+            }
+        } else {
+            let buffer_host_a = unsafe {
+                core::create_buffer::<_, u8>(
+                    &context,
+                    core::MEM_READ_WRITE | core::MEM_ALLOC_HOST_PTR,
+                    (NONCE_SIZE as usize) * worksize,
+                    None,
+                ).unwrap()
+            };
+
+            let buffer_host_b = unsafe {
+                core::create_buffer::<_, u8>(
+                    &context,
+                    core::MEM_READ_WRITE | core::MEM_ALLOC_HOST_PTR,
+                    (NONCE_SIZE as usize) * worksize,
+                    None,
+                ).unwrap()
+            };
+
+            let buffer_ptr_host_a = unsafe {
+                Some(
                     core::enqueue_map_buffer::<u8, _, _, _>(
-                        &(*locked_context).queue,
-                        &self.data_gpu,
-                        true,
-                        core::MAP_WRITE,
+                        &queue_b,
+                        &buffer_host_a,
+                        false,
+                        core::MAP_READ,
                         0,
-                        &(*locked_context).gdim1[0] * 64,
+                        gdim1[0] * NONCE_SIZE as usize,
                         None::<Event>,
                         None::<&mut Event>,
                     ).unwrap(),
-                ));
+                )
+            };
+
+            let buffer_ptr_host_b = unsafe {
+                Some(
+                    core::enqueue_map_buffer::<u8, _, _, _>(
+                        &queue_b,
+                        &buffer_host_b,
+                        false,
+                        core::MAP_READ,
+                        0,
+                        gdim1[0] * NONCE_SIZE as usize,
+                        None::<Event>,
+                        None::<&mut Event>,
+                    ).unwrap(),
+                )
+            };
+
+            let buffer_gpu_a = unsafe {
+                core::create_buffer::<_, u8>(
+                    &context,
+                    core::MEM_READ_WRITE,
+                    (NONCE_SIZE as usize) * worksize,
+                    None,
+                ).unwrap()
+            };
+
+            let buffer_gpu_b = unsafe {
+                core::create_buffer::<_, u8>(
+                    &context,
+                    core::MEM_READ_WRITE,
+                    (NONCE_SIZE as usize) * worksize,
+                    None,
+                ).unwrap()
+            };
+
+            //let buffer_host_a = vec![1u8; (NONCE_SIZE as usize) * worksize as usize];
+            //let buffer_host_b = vec![1u8; (NONCE_SIZE as usize) * worksize as usize];
+
+            GpuContext {
+                queue_a,
+                queue_b,
+                kernel,
+                ldim1,
+                gdim1,
+                mapping,
+                buffer_gpu_a,
+                buffer_gpu_b,
+                buffer_host_a: Some(buffer_host_a),
+                buffer_host_b: Some(buffer_host_b),
+                buffer_ptr_host_a,
+                buffer_ptr_host_b,
+                worksize,
             }
         }
-        self.data.clone()
     }
-
- 
-*/
+}
 
 // first run
-pub fn gpu_hash(gpu_context: &GpuContext, task: &GpuTask) {
+pub fn gpu_hash(gpu_context: Arc<Mutex<GpuContext>>, task: &GpuTask) {
     let numeric_id_be: u64 = unsafe { transmute(task.numeric_id.to_be()) };
 
     let mut start;
     let mut end;
+    let gpu_context = gpu_context.lock().unwrap();
 
     core::set_kernel_arg(
         &gpu_context.kernel,
@@ -307,49 +375,89 @@ pub fn gpu_hash(gpu_context: &GpuContext, task: &GpuTask) {
     core::finish(&gpu_context.queue_a).unwrap();
 }
 
-pub fn gpu_transfer_to_host(gpu_context: &GpuContext, buffer_id: u8, transfer_task: &GpuTask) {
-    let mut buffer = if buffer_id == 1 {
-        gpu_context.buffer_host_a.lock().unwrap()
-    } else {
-        gpu_context.buffer_host_b.lock().unwrap()
-    };
+pub fn gpu_transfer_to_host(
+    gpu_context: Arc<Mutex<GpuContext>>,
+    buffer_id: u8,
+    transfer_task: &GpuTask,
+) {
+    let mut gpu_context = gpu_context.lock().unwrap();
 
-    unsafe {
-        if buffer_id == 1 {
-            core::enqueue_read_buffer(
-                &gpu_context.queue_b,
-                &gpu_context.buffer_gpu_a,
-                true,
-                0,
-                &mut buffer[0..],
-                None::<Event>,
-                None::<&mut Event>,
-            ).unwrap();
-        } else {
-            core::enqueue_read_buffer(
-                &gpu_context.queue_b,
-                &gpu_context.buffer_gpu_b,
-                true,
-                0,
-                &mut buffer[0..],
-                None::<Event>,
-                None::<&mut Event>,
-            ).unwrap();
+    // get a pointer to host memory
+    let buffer = if gpu_context.mapping {
+        // map to host (zero copy buffer)
+        unsafe {
+            map = if buffer_id == 1 {
+                core::enqueue_map_buffer::<u8, _, _, _>(
+                    &gpu_context.queue_b,
+                    &gpu_context.buffer_gpu_a,
+                    true,
+                    core::MAP_READ,
+                    0,
+                    gpu_context.gdim1[0] * NONCE_SIZE as usize,
+                    None::<Event>,
+                    None::<&mut Event>,
+                ).unwrap()
+            } else {
+                core::enqueue_map_buffer::<u8, _, _, _>(
+                    &gpu_context.queue_b,
+                    &gpu_context.buffer_gpu_b,
+                    true,
+                    core::MAP_READ,
+                    0,
+                    gpu_context.gdim1[0] * NONCE_SIZE as usize,
+                    None::<Event>,
+                    None::<&mut Event>,
+                ).unwrap()
+            };
+            // return host pointer
+            map.as_ptr()
         }
-    }
+    } else {
+        // get pointer
+        let ptr = if buffer_id == 1 {
+            *&gpu_context.buffer_ptr_host_a.as_mut().unwrap().as_mut_ptr()
+        } else {
+            *&gpu_context.buffer_ptr_host_b.as_mut().unwrap().as_mut_ptr()
+        };
+        // copy to host
+        let slice = unsafe { from_raw_parts_mut(ptr, gpu_context.worksize * NONCE_SIZE as usize) };
+        unsafe {
+            if buffer_id == 1 {
+                core::enqueue_read_buffer(
+                    &gpu_context.queue_b,
+                    &gpu_context.buffer_gpu_a,
+                    true,
+                    0,
+                    slice,
+                    None::<Event>,
+                    None::<&mut Event>,
+                ).unwrap();
+            } else {
+                core::enqueue_read_buffer(
+                    &gpu_context.queue_b,
+                    &gpu_context.buffer_gpu_b,
+                    true,
+                    0,
+                    slice,
+                    None::<Event>,
+                    None::<&mut Event>,
+                ).unwrap();
+            }
+        }
+        ptr
+    };
 
     // simd shabal words unpack + POC Shuffle + scatter nonces into optimised cache
     // todo allow any multiple of nonces, not only x16
     unsafe {
+        let buffer = from_raw_parts(buffer, gpu_context.worksize * NONCE_SIZE as usize);
         let iter: Vec<u64> = (0..transfer_task.local_nonces).step_by(16).collect();
-
         iter.par_iter().for_each(|n| {
             // get global buffer
             let data = from_raw_parts_mut(
                 transfer_task.cache.ptr,
                 NONCE_SIZE as usize * transfer_task.cache_size as usize,
             );
-
             for i in 0..(NUM_SCOOPS * 2) {
                 for j in (0..32).step_by(4) {
                     for k in 0..MSHABAL512_VECTOR_SIZE {
@@ -370,42 +478,100 @@ pub fn gpu_transfer_to_host(gpu_context: &GpuContext, buffer_id: u8, transfer_ta
             }
         })
     }
+    // unmap
+    if gpu_context.mapping {
+        // map to host (zero copy buffer)
+        if buffer_id == 1 {
+            core::enqueue_unmap_mem_object(
+                &gpu_context.queue_a,
+                &gpu_context.buffer_gpu_a,
+                &map,
+                None::<Event>,
+                None::<&mut Event>,
+            ).unwrap()
+        } else {
+            core::enqueue_unmap_mem_object(
+                &gpu_context.queue_a,
+                &gpu_context.buffer_gpu_b,
+                &map,
+                None::<Event>,
+                None::<&mut Event>,
+            ).unwrap()
+        };
+    }
 }
 
 pub fn gpu_hash_and_transfer_to_host(
-    gpu_context: &GpuContext,
+    gpu_context: Arc<Mutex<GpuContext>>,
     buffer_id: u8,
     hasher_task: &GpuTask,
     transfer_task: &GpuTask,
 ) {
-    let mut buffer = if buffer_id == 1 {
-        gpu_context.buffer_host_a.lock().unwrap()
-    } else {
-        gpu_context.buffer_host_b.lock().unwrap()
-    };
-    unsafe {
-        if buffer_id == 1 {
-            core::enqueue_read_buffer(
-                &gpu_context.queue_b,
-                &gpu_context.buffer_gpu_a,
-                false,
-                0,
-                &mut buffer[0..],
-                None::<Event>,
-                None::<&mut Event>,
-            ).unwrap();
-        } else {
-            core::enqueue_read_buffer(
-                &gpu_context.queue_b,
-                &gpu_context.buffer_gpu_b,
-                false,
-                0,
-                &mut buffer[0..],
-                None::<Event>,
-                None::<&mut Event>,
-            ).unwrap();
+    let mut gpu_context = gpu_context.lock().unwrap();
+    // get a pointer to host memory
+    let buffer = if gpu_context.mapping {
+        // map to host (zero copy buffer)
+        unsafe {
+            let map = if buffer_id == 1 {
+                core::enqueue_map_buffer::<u8, _, _, _>(
+                    &gpu_context.queue_b,
+                    &gpu_context.buffer_gpu_a,
+                    false,
+                    core::MAP_READ,
+                    0,
+                    gpu_context.gdim1[0] * NONCE_SIZE as usize,
+                    None::<Event>,
+                    None::<&mut Event>,
+                ).unwrap()
+            } else {
+                core::enqueue_map_buffer::<u8, _, _, _>(
+                    &gpu_context.queue_b,
+                    &gpu_context.buffer_gpu_b,
+                    false,
+                    core::MAP_READ,
+                    0,
+                    gpu_context.gdim1[0] * NONCE_SIZE as usize,
+                    None::<Event>,
+                    None::<&mut Event>,
+                ).unwrap()
+            };
+            // return host pointer
+            map.as_ptr()
         }
-    }
+    } else {
+        // get pointer
+        let ptr = if buffer_id == 1 {
+            *&gpu_context.buffer_ptr_host_a.as_mut().unwrap().as_mut_ptr()
+        } else {
+            *&gpu_context.buffer_ptr_host_b.as_mut().unwrap().as_mut_ptr()
+        };
+        // copy to host
+        let slice = unsafe { from_raw_parts_mut(ptr, gpu_context.worksize * NONCE_SIZE as usize) };
+        unsafe {
+            if buffer_id == 1 {
+                core::enqueue_read_buffer(
+                    &gpu_context.queue_b,
+                    &gpu_context.buffer_gpu_a,
+                    false,
+                    0,
+                    slice,
+                    None::<Event>,
+                    None::<&mut Event>,
+                ).unwrap();
+            } else {
+                core::enqueue_read_buffer(
+                    &gpu_context.queue_b,
+                    &gpu_context.buffer_gpu_b,
+                    false,
+                    0,
+                    slice,
+                    None::<Event>,
+                    None::<&mut Event>,
+                ).unwrap();
+            }
+        }
+        ptr
+    };
 
     let numeric_id_be: u64 = unsafe { transmute(hasher_task.numeric_id.to_be()) };
 
@@ -463,15 +629,14 @@ pub fn gpu_hash_and_transfer_to_host(
     // simd shabal words unpack + POC Shuffle + scatter nonces into optimised cache
     // todo remove duplicate code parts
     unsafe {
+        let buffer = from_raw_parts(buffer, gpu_context.worksize * NONCE_SIZE as usize);
         let iter: Vec<u64> = (0..transfer_task.local_nonces).step_by(16).collect();
-
         iter.par_iter().for_each(|n| {
             // get global buffer
             let data = from_raw_parts_mut(
                 transfer_task.cache.ptr,
                 NONCE_SIZE as usize * transfer_task.cache_size as usize,
             );
-
             for i in 0..(NUM_SCOOPS * 2) {
                 for j in (0..32).step_by(4) {
                     for k in 0..MSHABAL512_VECTOR_SIZE {
@@ -492,35 +657,8 @@ pub fn gpu_hash_and_transfer_to_host(
             }
         })
     }
-
     core::finish(&gpu_context.queue_a).unwrap();
 }
-
-/*
-    if gpu_context.mapping {
-        let temp = buffer.memmap.clone();
-        let temp2 = temp.unwrap();
-        core::  (
-            &gpu_context.queue,
-            &buffer.data_gpu,
-            &*temp2,
-            None::<Event>,
-            None::<&mut Event>,
-        ).unwrap();
-    } else {
-        unsafe {
-            core::enqueue_write_buffer(
-                &gpu_context.queue,
-                &buffer.data_gpu,
-                false,
-                0,
-                &data2,
-                None::<Event>,
-                None::<&mut Event>,
-            ).unwrap();
-        }
-    } 
-*/
 
 fn get_kernel_work_group_size(x: &core::Kernel, y: core::DeviceId) -> usize {
     match core::get_kernel_work_group_info(x, y, KernelWorkGroupInfo::WorkGroupSize).unwrap() {
