@@ -68,8 +68,8 @@ pub struct GpuContext {
     ldim1: [usize; 3],
     gdim1: [usize; 3],
     mapping: bool,
-    buffer_host_a: Option<core::Mem>,
-    buffer_host_b: Option<core::Mem>,
+    _buffer_host_a: Option<core::Mem>,
+    _buffer_host_b: Option<core::Mem>,
     buffer_ptr_host_a: Option<core::MemMap<u8>>,
     buffer_ptr_host_b: Option<core::MemMap<u8>>,
     buffer_gpu_a: core::Mem,
@@ -227,8 +227,8 @@ impl GpuContext {
                 mapping,
                 buffer_gpu_a,
                 buffer_gpu_b,
-                buffer_host_a: None,
-                buffer_host_b: None,
+                _buffer_host_a: None,
+                _buffer_host_b: None,
                 buffer_ptr_host_a: None,
                 buffer_ptr_host_b: None,
                 worksize,
@@ -312,8 +312,8 @@ impl GpuContext {
                 mapping,
                 buffer_gpu_a,
                 buffer_gpu_b,
-                buffer_host_a: Some(buffer_host_a),
-                buffer_host_b: Some(buffer_host_b),
+                _buffer_host_a: Some(buffer_host_a),
+                _buffer_host_b: Some(buffer_host_b),
                 buffer_ptr_host_a,
                 buffer_ptr_host_b,
                 worksize,
@@ -382,36 +382,43 @@ pub fn gpu_transfer_to_host(
 ) {
     let mut gpu_context = gpu_context.lock().unwrap();
 
-    // get a pointer to host memory
+    // get mem mapping
+    let map = if gpu_context.mapping {
+        Some(
+            // map to host (zero copy buffer)
+            unsafe {
+                if buffer_id == 1 {
+                    core::enqueue_map_buffer::<u8, _, _, _>(
+                        &gpu_context.queue_b,
+                        &gpu_context.buffer_gpu_a,
+                        true,
+                        core::MAP_READ,
+                        0,
+                        gpu_context.gdim1[0] * NONCE_SIZE as usize,
+                        None::<Event>,
+                        None::<&mut Event>,
+                    ).unwrap()
+                } else {
+                    core::enqueue_map_buffer::<u8, _, _, _>(
+                        &gpu_context.queue_b,
+                        &gpu_context.buffer_gpu_b,
+                        true,
+                        core::MAP_READ,
+                        0,
+                        gpu_context.gdim1[0] * NONCE_SIZE as usize,
+                        None::<Event>,
+                        None::<&mut Event>,
+                    ).unwrap()
+                }
+            },
+        )
+    } else {
+        None
+    };
+
     let buffer = if gpu_context.mapping {
         // map to host (zero copy buffer)
-        unsafe {
-            map = if buffer_id == 1 {
-                core::enqueue_map_buffer::<u8, _, _, _>(
-                    &gpu_context.queue_b,
-                    &gpu_context.buffer_gpu_a,
-                    true,
-                    core::MAP_READ,
-                    0,
-                    gpu_context.gdim1[0] * NONCE_SIZE as usize,
-                    None::<Event>,
-                    None::<&mut Event>,
-                ).unwrap()
-            } else {
-                core::enqueue_map_buffer::<u8, _, _, _>(
-                    &gpu_context.queue_b,
-                    &gpu_context.buffer_gpu_b,
-                    true,
-                    core::MAP_READ,
-                    0,
-                    gpu_context.gdim1[0] * NONCE_SIZE as usize,
-                    None::<Event>,
-                    None::<&mut Event>,
-                ).unwrap()
-            };
-            // return host pointer
-            map.as_ptr()
-        }
+        map.as_ref().unwrap().as_ptr()
     } else {
         // get pointer
         let ptr = if buffer_id == 1 {
@@ -485,7 +492,7 @@ pub fn gpu_transfer_to_host(
             core::enqueue_unmap_mem_object(
                 &gpu_context.queue_a,
                 &gpu_context.buffer_gpu_a,
-                &map,
+                &map.unwrap(),
                 None::<Event>,
                 None::<&mut Event>,
             ).unwrap()
@@ -493,11 +500,12 @@ pub fn gpu_transfer_to_host(
             core::enqueue_unmap_mem_object(
                 &gpu_context.queue_a,
                 &gpu_context.buffer_gpu_b,
-                &map,
+                &map.unwrap(),
                 None::<Event>,
                 None::<&mut Event>,
             ).unwrap()
         };
+    core::finish(&gpu_context.queue_a).unwrap();
     }
 }
 
@@ -508,36 +516,44 @@ pub fn gpu_hash_and_transfer_to_host(
     transfer_task: &GpuTask,
 ) {
     let mut gpu_context = gpu_context.lock().unwrap();
-    // get a pointer to host memory
+
+    // get mem mapping
+    let map = if gpu_context.mapping {
+        Some(
+            // map to host (zero copy buffer)
+            unsafe {
+                if buffer_id == 1 {
+                    core::enqueue_map_buffer::<u8, _, _, _>(
+                        &gpu_context.queue_b,
+                        &gpu_context.buffer_gpu_a,
+                        true,
+                        core::MAP_READ,
+                        0,
+                        gpu_context.gdim1[0] * NONCE_SIZE as usize,
+                        None::<Event>,
+                        None::<&mut Event>,
+                    ).unwrap()
+                } else {
+                    core::enqueue_map_buffer::<u8, _, _, _>(
+                        &gpu_context.queue_b,
+                        &gpu_context.buffer_gpu_b,
+                        true,
+                        core::MAP_READ,
+                        0,
+                        gpu_context.gdim1[0] * NONCE_SIZE as usize,
+                        None::<Event>,
+                        None::<&mut Event>,
+                    ).unwrap()
+                }
+            },
+        )
+    } else {
+        None
+    };
+
     let buffer = if gpu_context.mapping {
         // map to host (zero copy buffer)
-        unsafe {
-            let map = if buffer_id == 1 {
-                core::enqueue_map_buffer::<u8, _, _, _>(
-                    &gpu_context.queue_b,
-                    &gpu_context.buffer_gpu_a,
-                    false,
-                    core::MAP_READ,
-                    0,
-                    gpu_context.gdim1[0] * NONCE_SIZE as usize,
-                    None::<Event>,
-                    None::<&mut Event>,
-                ).unwrap()
-            } else {
-                core::enqueue_map_buffer::<u8, _, _, _>(
-                    &gpu_context.queue_b,
-                    &gpu_context.buffer_gpu_b,
-                    false,
-                    core::MAP_READ,
-                    0,
-                    gpu_context.gdim1[0] * NONCE_SIZE as usize,
-                    None::<Event>,
-                    None::<&mut Event>,
-                ).unwrap()
-            };
-            // return host pointer
-            map.as_ptr()
-        }
+        map.as_ref().unwrap().as_ptr()
     } else {
         // get pointer
         let ptr = if buffer_id == 1 {
@@ -552,7 +568,7 @@ pub fn gpu_hash_and_transfer_to_host(
                 core::enqueue_read_buffer(
                     &gpu_context.queue_b,
                     &gpu_context.buffer_gpu_a,
-                    false,
+                    true,
                     0,
                     slice,
                     None::<Event>,
@@ -562,7 +578,7 @@ pub fn gpu_hash_and_transfer_to_host(
                 core::enqueue_read_buffer(
                     &gpu_context.queue_b,
                     &gpu_context.buffer_gpu_b,
-                    false,
+                    true,
                     0,
                     slice,
                     None::<Event>,
@@ -656,6 +672,28 @@ pub fn gpu_hash_and_transfer_to_host(
                 }
             }
         })
+    }
+  
+    // unmap
+    if gpu_context.mapping {
+        // map to host (zero copy buffer)
+        if buffer_id == 1 {
+            core::enqueue_unmap_mem_object(
+                &gpu_context.queue_a,
+                &gpu_context.buffer_gpu_a,
+                &map.unwrap(),
+                None::<Event>,
+                None::<&mut Event>,
+            ).unwrap()
+        } else {
+            core::enqueue_unmap_mem_object(
+                &gpu_context.queue_a,
+                &gpu_context.buffer_gpu_b,
+                &map.unwrap(),
+                None::<Event>,
+                None::<&mut Event>,
+            ).unwrap()
+        };
     }
     core::finish(&gpu_context.queue_a).unwrap();
 }
