@@ -39,7 +39,7 @@ pub fn create_scheduler_thread(
         // create gpu threads and channels
         #[cfg(feature = "opencl")]
         let gpu_contexts = match &task.gpus {
-            Some(x) => Some(gpu_init(&x)),
+            Some(x) => Some(gpu_init(&x, task.zcb)),
             None => None,
         };
 

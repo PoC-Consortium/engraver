@@ -48,6 +48,7 @@ pub struct PlotterTask {
     pub direct_io: bool,
     pub async_io: bool,
     pub quiet: bool,
+    pub zcb: bool,
 }
 
 pub struct Buffer {

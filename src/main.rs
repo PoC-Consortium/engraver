@@ -175,6 +175,12 @@ fn main() {
             .long("opencl")
             .help("Display OpenCL platforms and devices")
             .global(true),
+    ).arg(
+        Arg::with_name("zero-copy")
+                .short("z")
+                .long("zcb")
+                .help("Enables zero copy buffers for shared mem (integrated) gpus")
+                .global(true),
     );
     let matches = &arg.get_matches();
 
@@ -229,5 +235,6 @@ fn main() {
         direct_io: !matches.is_present("disable direct i/o"),
         async_io: !matches.is_present("disable async i/o"),
         quiet: matches.is_present("non-verbosity"),
+        zcb:  matches.is_present("zero-copy"),
     });
 }

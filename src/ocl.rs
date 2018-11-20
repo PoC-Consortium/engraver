@@ -4,28 +4,22 @@ extern crate rayon;
 use self::core::{
     ArgVal, ContextProperties, DeviceInfo, Event, KernelWorkGroupInfo, PlatformInfo, Status,
 };
-
 use gpu_hasher::GpuTask;
+use std::ffi::CString;
+use std::slice::{from_raw_parts, from_raw_parts_mut};
+use std::mem::transmute;
+use std::process;
+use ocl::rayon::prelude::*;
+use std::sync::{Arc, Mutex};
+use std::u64;
+
+static SRC: &'static str = include_str!("ocl/kernel.cl");
 
 const NONCE_SIZE: u64 = (2 << 17);
 const NUM_SCOOPS: u64 = 4096;
 const GPU_HASHES_PER_RUN: usize = 32;
 const MSHABAL512_VECTOR_SIZE: u64 = 16;
 const SCOOP_SIZE: u64 = 64;
-
-//use config::Cfg;
-use std::ffi::CString;
-use std::slice::{from_raw_parts, from_raw_parts_mut};
-
-use std::mem::transmute;
-use std::process;
-
-use ocl::rayon::prelude::*;
-
-use std::sync::{Arc, Mutex};
-use std::u64;
-
-static SRC: &'static str = include_str!("ocl/kernel.cl");
 
 // convert the info or error to a string for printing:
 macro_rules! to_string {
@@ -38,6 +32,149 @@ macro_rules! to_string {
             },
         }
     };
+}
+
+pub struct GpuContext {
+    queue_a: core::CommandQueue,
+    queue_b: core::CommandQueue,
+    kernel: core::Kernel,
+    ldim1: [usize; 3],
+    gdim1: [usize; 3],
+    mapping: bool,
+    buffer_ptr_host_a: Option<core::MemMap<u8>>,
+    buffer_ptr_host_b: Option<core::MemMap<u8>>,
+    buffer_gpu_a: core::Mem,
+    buffer_gpu_b: core::Mem,
+    pub worksize: usize,
+}
+
+// Ohne Gummi im Bahnhofsviertel... das wird noch Konsequenzen haben
+unsafe impl Sync for GpuContext {}
+
+impl GpuContext {
+    pub fn new(
+        gpu_platform: usize,
+        gpu_id: usize,
+        max_nonces_per_cache: usize,
+        mapping: bool,
+    ) -> GpuContext {
+        let platform_ids = core::get_platform_ids().unwrap();
+        let platform_id = platform_ids[gpu_platform];
+        let device_ids = core::get_device_ids(&platform_id, None, None).unwrap();
+        let device_id = device_ids[gpu_id];
+        let context_properties = ContextProperties::new().platform(platform_id);
+        let context =
+            core::create_context(Some(&context_properties), &[device_id], None, None).unwrap();
+        let src_cstring = CString::new(SRC).unwrap();
+        let program = core::create_program_with_source(&context, &[src_cstring]).unwrap();
+        core::build_program(
+            &program,
+            None::<&[()]>,
+            &CString::new("").unwrap(),
+            None,
+            None,
+        ).unwrap();
+        let queue_a = core::create_command_queue(&context, &device_id, None).unwrap();
+        let queue_b = core::create_command_queue(&context, &device_id, None).unwrap();
+        let kernel = core::create_kernel(&program, "calculate_nonces").unwrap();
+        let kernel_workgroup_size = get_kernel_work_group_size(&kernel, device_id);
+        let workgroup_count = max_nonces_per_cache / kernel_workgroup_size;
+        let worksize = kernel_workgroup_size * workgroup_count;
+        let gdim1 = [worksize, 1, 1];
+        let ldim1 = [kernel_workgroup_size, 1, 1];
+
+        // create buffers
+        // mapping = zero copy buffers, no mapping = pinned memory for fast DMA.
+        if mapping {
+            let buffer_gpu_a = unsafe {
+                core::create_buffer::<_, u8>(
+                    &context,
+                    core::MEM_READ_WRITE | core::MEM_ALLOC_HOST_PTR,
+                    (NONCE_SIZE as usize) * worksize,
+                    None,
+                ).unwrap()
+            };
+            let buffer_gpu_b = unsafe {
+                core::create_buffer::<_, u8>(
+                    &context,
+                    core::MEM_READ_WRITE | core::MEM_ALLOC_HOST_PTR,
+                    (NONCE_SIZE as usize) * worksize,
+                    None,
+                ).unwrap()
+            };
+            GpuContext {
+                queue_a,
+                queue_b,
+                kernel,
+                ldim1,
+                gdim1,
+                mapping,
+                buffer_gpu_a,
+                buffer_gpu_b,
+                buffer_ptr_host_a: None,
+                buffer_ptr_host_b: None,
+                worksize,
+            }
+        } else {
+            let buffer_gpu_a = unsafe {
+                core::create_buffer::<_, u8>(
+                    &context,
+                    core::MEM_READ_WRITE | core::MEM_ALLOC_HOST_PTR,
+                    (NONCE_SIZE as usize) * worksize,
+                    None,
+                ).unwrap()
+            };
+            let buffer_gpu_b = unsafe {
+                core::create_buffer::<_, u8>(
+                    &context,
+                    core::MEM_READ_WRITE | core::MEM_ALLOC_HOST_PTR,
+                    (NONCE_SIZE as usize) * worksize,
+                    None,
+                ).unwrap()
+            };
+            let buffer_ptr_host_a = unsafe {
+                Some(
+                    core::enqueue_map_buffer::<u8, _, _, _>(
+                        &queue_b,
+                        &buffer_gpu_a,
+                        false,
+                        core::MAP_READ,
+                        0,
+                        gdim1[0] * NONCE_SIZE as usize,
+                        None::<Event>,
+                        None::<&mut Event>,
+                    ).unwrap(),
+                )
+            };
+            let buffer_ptr_host_b = unsafe {
+                Some(
+                    core::enqueue_map_buffer::<u8, _, _, _>(
+                        &queue_b,
+                        &buffer_gpu_b,
+                        false,
+                        core::MAP_READ,
+                        0,
+                        gdim1[0] * NONCE_SIZE as usize,
+                        None::<Event>,
+                        None::<&mut Event>,
+                    ).unwrap(),
+                )
+            };
+            GpuContext {
+                queue_a,
+                queue_b,
+                kernel,
+                ldim1,
+                gdim1,
+                mapping,
+                buffer_gpu_a,
+                buffer_gpu_b,
+                buffer_ptr_host_a,
+                buffer_ptr_host_b,
+                worksize,
+            }
+        }
+    }
 }
 
 pub fn platform_info() {
@@ -59,22 +196,6 @@ pub fn platform_info() {
             );
         }
     }
-}
-
-pub struct GpuContext {
-    queue_a: core::CommandQueue,
-    queue_b: core::CommandQueue,
-    kernel: core::Kernel,
-    ldim1: [usize; 3],
-    gdim1: [usize; 3],
-    mapping: bool,
-    _buffer_host_a: Option<core::Mem>,
-    _buffer_host_b: Option<core::Mem>,
-    buffer_ptr_host_a: Option<core::MemMap<u8>>,
-    buffer_ptr_host_b: Option<core::MemMap<u8>>,
-    buffer_gpu_a: core::Mem,
-    buffer_gpu_b: core::Mem,
-    pub worksize: usize,
 }
 
 pub fn gpu_show_info(gpus: &Vec<String>) {
@@ -112,7 +233,7 @@ pub fn gpu_show_info(gpus: &Vec<String>) {
     }
 }
 
-pub fn gpu_init(gpus: &Vec<String>) -> Vec<Arc<Mutex<GpuContext>>> {
+pub fn gpu_init(gpus: &Vec<String>, zcb: bool) -> Vec<Arc<Mutex<GpuContext>>> {
     let mut result = Vec::new();
     for gpu in gpus.iter() {
         let gpu = gpu.split(":").collect::<Vec<&str>>();
@@ -139,8 +260,6 @@ pub fn gpu_init(gpus: &Vec<String>) -> Vec<Arc<Mutex<GpuContext>>> {
             _ => panic!("Unexpected error. Can't obtain GPU memory size."),
         };
 
-        // Hello again!
-        let gpu_mapping = true;
         // use max 25% of total gpu mem
         // todo: user limit
         let num_buffer = 2;
@@ -149,180 +268,19 @@ pub fn gpu_init(gpus: &Vec<String>) -> Vec<Arc<Mutex<GpuContext>>> {
             platform_id,
             gpu_id,
             max_nonces,
-            gpu_mapping,
+            zcb,
         ))));
     }
     result
 }
 
-// Ohne Gummi im Bahnhofsviertel... das wird noch Konsequenzen haben
-unsafe impl Sync for GpuContext {}
-
-impl GpuContext {
-    pub fn new(
-        gpu_platform: usize,
-        gpu_id: usize,
-        max_nonces_per_cache: usize,
-        mapping: bool,
-    ) -> GpuContext {
-        let platform_ids = core::get_platform_ids().unwrap();
-        let platform_id = platform_ids[gpu_platform];
-        let device_ids = core::get_device_ids(&platform_id, None, None).unwrap();
-        let device_id = device_ids[gpu_id];
-        let context_properties = ContextProperties::new().platform(platform_id);
-        let context =
-            core::create_context(Some(&context_properties), &[device_id], None, None).unwrap();
-        let src_cstring = CString::new(SRC).unwrap();
-        let program = core::create_program_with_source(&context, &[src_cstring]).unwrap();
-        core::build_program(
-            &program,
-            None::<&[()]>,
-            &CString::new("").unwrap(),
-            None,
-            None,
-        ).unwrap();
-        let queue_a = core::create_command_queue(&context, &device_id, None).unwrap();
-        let queue_b = core::create_command_queue(&context, &device_id, None).unwrap();
-        let kernel = core::create_kernel(&program, "calculate_nonces").unwrap();
-
-        let kernel_workgroup_size = get_kernel_work_group_size(&kernel, device_id);
-
-        let workgroup_count = max_nonces_per_cache / kernel_workgroup_size;
-
-        let worksize = kernel_workgroup_size * workgroup_count;
-
-        let gdim1 = [worksize, 1, 1];
-        let ldim1 = [kernel_workgroup_size, 1, 1];
-
-        // create buffers
-        // mapping = zero copy buffers, no mapping = pinned memory for fast DMA.
-        if mapping {
-            let buffer_gpu_a = unsafe {
-                core::create_buffer::<_, u8>(
-                    &context,
-                    core::MEM_READ_WRITE | core::MEM_ALLOC_HOST_PTR,
-                    (NONCE_SIZE as usize) * worksize,
-                    None,
-                ).unwrap()
-            };
-
-            let buffer_gpu_b = unsafe {
-                core::create_buffer::<_, u8>(
-                    &context,
-                    core::MEM_READ_WRITE | core::MEM_ALLOC_HOST_PTR,
-                    (NONCE_SIZE as usize) * worksize,
-                    None,
-                ).unwrap()
-            };
-
-            //let buffer_host_a = vec![1u8; (NONCE_SIZE as usize) * worksize as usize];
-            //let buffer_host_b = vec![1u8; (NONCE_SIZE as usize) * worksize as usize];
-
-            GpuContext {
-                queue_a,
-                queue_b,
-                kernel,
-                ldim1,
-                gdim1,
-                mapping,
-                buffer_gpu_a,
-                buffer_gpu_b,
-                _buffer_host_a: None,
-                _buffer_host_b: None,
-                buffer_ptr_host_a: None,
-                buffer_ptr_host_b: None,
-                worksize,
-            }
-        } else {
-            let buffer_host_a = unsafe {
-                core::create_buffer::<_, u8>(
-                    &context,
-                    core::MEM_READ_WRITE | core::MEM_ALLOC_HOST_PTR,
-                    (NONCE_SIZE as usize) * worksize,
-                    None,
-                ).unwrap()
-            };
-
-            let buffer_host_b = unsafe {
-                core::create_buffer::<_, u8>(
-                    &context,
-                    core::MEM_READ_WRITE | core::MEM_ALLOC_HOST_PTR,
-                    (NONCE_SIZE as usize) * worksize,
-                    None,
-                ).unwrap()
-            };
-
-            let buffer_ptr_host_a = unsafe {
-                Some(
-                    core::enqueue_map_buffer::<u8, _, _, _>(
-                        &queue_b,
-                        &buffer_host_a,
-                        false,
-                        core::MAP_READ,
-                        0,
-                        gdim1[0] * NONCE_SIZE as usize,
-                        None::<Event>,
-                        None::<&mut Event>,
-                    ).unwrap(),
-                )
-            };
-
-            let buffer_ptr_host_b = unsafe {
-                Some(
-                    core::enqueue_map_buffer::<u8, _, _, _>(
-                        &queue_b,
-                        &buffer_host_b,
-                        false,
-                        core::MAP_READ,
-                        0,
-                        gdim1[0] * NONCE_SIZE as usize,
-                        None::<Event>,
-                        None::<&mut Event>,
-                    ).unwrap(),
-                )
-            };
-
-            let buffer_gpu_a = unsafe {
-                core::create_buffer::<_, u8>(
-                    &context,
-                    core::MEM_READ_WRITE,
-                    (NONCE_SIZE as usize) * worksize,
-                    None,
-                ).unwrap()
-            };
-
-            let buffer_gpu_b = unsafe {
-                core::create_buffer::<_, u8>(
-                    &context,
-                    core::MEM_READ_WRITE,
-                    (NONCE_SIZE as usize) * worksize,
-                    None,
-                ).unwrap()
-            };
-
-            //let buffer_host_a = vec![1u8; (NONCE_SIZE as usize) * worksize as usize];
-            //let buffer_host_b = vec![1u8; (NONCE_SIZE as usize) * worksize as usize];
-
-            GpuContext {
-                queue_a,
-                queue_b,
-                kernel,
-                ldim1,
-                gdim1,
-                mapping,
-                buffer_gpu_a,
-                buffer_gpu_b,
-                _buffer_host_a: Some(buffer_host_a),
-                _buffer_host_b: Some(buffer_host_b),
-                buffer_ptr_host_a,
-                buffer_ptr_host_b,
-                worksize,
-            }
-        }
+fn get_kernel_work_group_size(x: &core::Kernel, y: core::DeviceId) -> usize {
+    match core::get_kernel_work_group_info(x, y, KernelWorkGroupInfo::WorkGroupSize).unwrap() {
+        core::KernelWorkGroupInfoResult::WorkGroupSize(kws) => kws,
+        _ => panic!("Unexpected error"),
     }
 }
 
-// first run
 pub fn gpu_hash(gpu_context: Arc<Mutex<GpuContext>>, task: &GpuTask) {
     let numeric_id_be: u64 = unsafe { transmute(task.numeric_id.to_be()) };
 
@@ -623,10 +581,8 @@ pub fn gpu_hash_and_transfer_to_host(
             start = i;
             end = i + GPU_HASHES_PER_RUN;
         }
-
         core::set_kernel_arg(&gpu_context.kernel, 3, ArgVal::primitive(&(start as i32))).unwrap();
         core::set_kernel_arg(&gpu_context.kernel, 4, ArgVal::primitive(&(end as i32))).unwrap();
-
         unsafe {
             core::enqueue_kernel(
                 &gpu_context.queue_a,
@@ -672,8 +628,7 @@ pub fn gpu_hash_and_transfer_to_host(
                 }
             }
         })
-    }
-  
+    }  
     // unmap
     if gpu_context.mapping {
         // map to host (zero copy buffer)
@@ -696,11 +651,4 @@ pub fn gpu_hash_and_transfer_to_host(
         };
     }
     core::finish(&gpu_context.queue_a).unwrap();
-}
-
-fn get_kernel_work_group_size(x: &core::Kernel, y: core::DeviceId) -> usize {
-    match core::get_kernel_work_group_info(x, y, KernelWorkGroupInfo::WorkGroupSize).unwrap() {
-        core::KernelWorkGroupInfoResult::WorkGroupSize(kws) => kws,
-        _ => panic!("Unexpected error"),
-    }
 }
