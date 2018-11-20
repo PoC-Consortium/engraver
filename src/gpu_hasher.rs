@@ -59,12 +59,7 @@ pub fn create_gpu_hasher_thread(
                             .expect("GPU task can't communicate with scheduler thread.");
                     // normal run - hash and transfer async
                     } else {
-                        gpu_hash_and_transfer_to_host(
-                            &gpu_context,
-                            buffer_id,
-                            &task,
-                            &last_task,
-                        );
+                        gpu_hash_and_transfer_to_host(&gpu_context, buffer_id, &task, &last_task);
                         buffer_id = 1 - buffer_id;
                         tx.send((gpu_id, 0u8, last_task.local_nonces))
                             .expect("GPU task can't communicate with scheduler thread.");

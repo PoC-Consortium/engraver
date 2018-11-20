@@ -210,16 +210,15 @@ fn main() {
             .unwrap()
     });
     let mem = value_t!(matches, "memory", String).unwrap_or_else(|_| "0B".to_owned());
-    let cpu_threads =
-        value_t!(matches, "cpu", u8).unwrap_or_else(|_| sys_info::cpu_num().unwrap() as u8);
+    let cpu_threads = value_t!(matches, "cpu", u8).unwrap_or(0u8);
 
     let gpus = if matches.occurrences_of("gpu") > 0 {
-        let gpu = values_t!(matches, "gpu", String).unwrap_or(Vec::new());
-        if !gpu.is_empty() {
-            Some(gpu)
-        } else {
-            None
-        }
+        let gpu = values_t!(matches, "gpu", String); //.unwrap_or(Vec::new());
+                                                     // if !gpu.is_empty() {
+        Some(gpu.unwrap())
+    //   } else {
+    //   None
+    // }
     } else {
         None
     };
