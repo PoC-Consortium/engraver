@@ -210,7 +210,7 @@ pub fn create_scheduler_thread(
                 }
                 // shutdown gpu threads
                 #[cfg(feature = "opencl")]
-                for gpu in gpu_channels.iter() {
+                for gpu in &gpu_channels {
                     gpu.0.send(None);
                 }
                 break;

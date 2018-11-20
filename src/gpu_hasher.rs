@@ -44,35 +44,33 @@ pub fn create_gpu_hasher_thread(
                     if first_run {
                         if task.local_nonces != 0 {
                             first_run = false;
-                            gpu_hash(gpu_context.clone(), &task);
+                            gpu_hash(&gpu_context, &task);
                             buffer_id = 1 - buffer_id;
                             last_task = task;
                             tx.send((gpu_id, 1u8, 0))
                                 .expect("GPU task can't communicate with scheduler thread.");
                         }
+                    // last run - just transfer
+                    } else if task.local_nonces == 0 {
+                        gpu_transfer_to_host(&gpu_context, buffer_id, &last_task);
+                        first_run = true;
+                        buffer_id = 0;
+                        tx.send((gpu_id, 0u8, last_task.local_nonces))
+                            .expect("GPU task can't communicate with scheduler thread.");
+                    // normal run - hash and transfer async
                     } else {
-                        // last run - just transfer
-                        if task.local_nonces == 0 {
-                            gpu_transfer_to_host(gpu_context.clone(), buffer_id, &last_task);
-                            first_run = true;
-                            buffer_id = 0;
-                            tx.send((gpu_id, 0u8, last_task.local_nonces))
-                                .expect("GPU task can't communicate with scheduler thread.");
-                        // normal run - hash and transfer async
-                        } else {
-                            gpu_hash_and_transfer_to_host(
-                                gpu_context.clone(),
-                                buffer_id,
-                                &task,
-                                &last_task,
-                            );
-                            buffer_id = 1 - buffer_id;
-                            tx.send((gpu_id, 0u8, last_task.local_nonces))
-                                .expect("GPU task can't communicate with scheduler thread.");
-                            last_task = task;
-                            tx.send((gpu_id, 1u8, 0))
-                                .expect("GPU task can't communicate with scheduler thread.");
-                        }
+                        gpu_hash_and_transfer_to_host(
+                            &gpu_context,
+                            buffer_id,
+                            &task,
+                            &last_task,
+                        );
+                        buffer_id = 1 - buffer_id;
+                        tx.send((gpu_id, 0u8, last_task.local_nonces))
+                            .expect("GPU task can't communicate with scheduler thread.");
+                        last_task = task;
+                        tx.send((gpu_id, 1u8, 0))
+                            .expect("GPU task can't communicate with scheduler thread.");
                     }
                 }
                 // termination

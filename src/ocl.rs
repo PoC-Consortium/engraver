@@ -5,11 +5,10 @@ use self::core::{
     ArgVal, ContextProperties, DeviceInfo, Event, KernelWorkGroupInfo, PlatformInfo, Status,
 };
 use gpu_hasher::GpuTask;
-use std::ffi::CString;
-use std::slice::{from_raw_parts, from_raw_parts_mut};
-use std::mem::transmute;
-use std::process;
 use ocl::rayon::prelude::*;
+use std::ffi::CString;
+use std::process;
+use std::slice::{from_raw_parts, from_raw_parts_mut};
 use std::sync::{Arc, Mutex};
 use std::u64;
 
@@ -198,9 +197,9 @@ pub fn platform_info() {
     }
 }
 
-pub fn gpu_show_info(gpus: &Vec<String>) {
+pub fn gpu_show_info(gpus: &[String]) {
     for gpu in gpus.iter() {
-        let gpu = gpu.split(":").collect::<Vec<&str>>();
+        let gpu = gpu.split(':').collect::<Vec<&str>>();
         let platform_id = gpu[0].parse::<usize>().unwrap();
         let gpu_id = gpu[1].parse::<usize>().unwrap();
 
@@ -233,10 +232,10 @@ pub fn gpu_show_info(gpus: &Vec<String>) {
     }
 }
 
-pub fn gpu_init(gpus: &Vec<String>, zcb: bool) -> Vec<Arc<Mutex<GpuContext>>> {
+pub fn gpu_init(gpus: &[String], zcb: bool) -> Vec<Arc<Mutex<GpuContext>>> {
     let mut result = Vec::new();
     for gpu in gpus.iter() {
-        let gpu = gpu.split(":").collect::<Vec<&str>>();
+        let gpu = gpu.split(':').collect::<Vec<&str>>();
         let platform_id = gpu[0].parse::<usize>().unwrap();
         let gpu_id = gpu[1].parse::<usize>().unwrap();
 
@@ -281,8 +280,8 @@ fn get_kernel_work_group_size(x: &core::Kernel, y: core::DeviceId) -> usize {
     }
 }
 
-pub fn gpu_hash(gpu_context: Arc<Mutex<GpuContext>>, task: &GpuTask) {
-    let numeric_id_be: u64 = unsafe { transmute(task.numeric_id.to_be()) };
+pub fn gpu_hash(gpu_context: &Arc<Mutex<GpuContext>>, task: &GpuTask) {
+    let numeric_id_be: u64 = task.numeric_id.to_be();
 
     let mut start;
     let mut end;
@@ -334,7 +333,7 @@ pub fn gpu_hash(gpu_context: Arc<Mutex<GpuContext>>, task: &GpuTask) {
 }
 
 pub fn gpu_transfer_to_host(
-    gpu_context: Arc<Mutex<GpuContext>>,
+    gpu_context: &Arc<Mutex<GpuContext>>,
     buffer_id: u8,
     transfer_task: &GpuTask,
 ) {
@@ -380,9 +379,9 @@ pub fn gpu_transfer_to_host(
     } else {
         // get pointer
         let ptr = if buffer_id == 1 {
-            *&gpu_context.buffer_ptr_host_a.as_mut().unwrap().as_mut_ptr()
+            gpu_context.buffer_ptr_host_a.as_mut().unwrap().as_mut_ptr()
         } else {
-            *&gpu_context.buffer_ptr_host_b.as_mut().unwrap().as_mut_ptr()
+            gpu_context.buffer_ptr_host_b.as_mut().unwrap().as_mut_ptr()
         };
         // copy to host
         let slice = unsafe { from_raw_parts_mut(ptr, gpu_context.worksize * NONCE_SIZE as usize) };
@@ -436,7 +435,7 @@ pub fn gpu_transfer_to_host(
                         let buffer_offset = (*n * NONCE_SIZE
                             + (i * 32 + j) * MSHABAL512_VECTOR_SIZE
                             + k * 4) as usize;
-                        &data[data_offset..(data_offset + 4)]
+                        data[data_offset..(data_offset + 4)]
                             .clone_from_slice(&buffer[buffer_offset..(buffer_offset + 4)]);
                     }
                 }
@@ -463,12 +462,12 @@ pub fn gpu_transfer_to_host(
                 None::<&mut Event>,
             ).unwrap()
         };
-    core::finish(&gpu_context.queue_a).unwrap();
+        core::finish(&gpu_context.queue_a).unwrap();
     }
 }
 
 pub fn gpu_hash_and_transfer_to_host(
-    gpu_context: Arc<Mutex<GpuContext>>,
+    gpu_context: &Arc<Mutex<GpuContext>>,
     buffer_id: u8,
     hasher_task: &GpuTask,
     transfer_task: &GpuTask,
@@ -515,9 +514,9 @@ pub fn gpu_hash_and_transfer_to_host(
     } else {
         // get pointer
         let ptr = if buffer_id == 1 {
-            *&gpu_context.buffer_ptr_host_a.as_mut().unwrap().as_mut_ptr()
+            gpu_context.buffer_ptr_host_a.as_mut().unwrap().as_mut_ptr()
         } else {
-            *&gpu_context.buffer_ptr_host_b.as_mut().unwrap().as_mut_ptr()
+            gpu_context.buffer_ptr_host_b.as_mut().unwrap().as_mut_ptr()
         };
         // copy to host
         let slice = unsafe { from_raw_parts_mut(ptr, gpu_context.worksize * NONCE_SIZE as usize) };
@@ -547,7 +546,7 @@ pub fn gpu_hash_and_transfer_to_host(
         ptr
     };
 
-    let numeric_id_be: u64 = unsafe { transmute(hasher_task.numeric_id.to_be()) };
+    let numeric_id_be: u64 = hasher_task.numeric_id.to_be();
 
     let mut start;
     let mut end;
@@ -622,13 +621,13 @@ pub fn gpu_hash_and_transfer_to_host(
                         let buffer_offset = (*n * NONCE_SIZE
                             + (i * 32 + j) * MSHABAL512_VECTOR_SIZE
                             + k * 4) as usize;
-                        &data[data_offset..(data_offset + 4)]
+                        data[data_offset..(data_offset + 4)]
                             .clone_from_slice(&buffer[buffer_offset..(buffer_offset + 4)]);
                     }
                 }
             }
         })
-    }  
+    }
     // unmap
     if gpu_context.mapping {
         // map to host (zero copy buffer)
