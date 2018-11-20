@@ -86,6 +86,8 @@ impl Plotter {
             println!("Engraver {} - PoC2 Plotter\n", crate_version!());
         }
 
+        // todo move this to main to reduce complexity
+
         #[cfg(feature = "opencl")]
         let gpu_count = match &task.gpus {
             Some(x) => x.len(),
