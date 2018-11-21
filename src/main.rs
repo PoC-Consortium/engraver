@@ -25,6 +25,7 @@ use clap::ArgGroup;
 use clap::{App, Arg};
 use plotter::{Plotter, PlotterTask};
 use utils::set_low_prio;
+use std::cmp::min;
 
 fn main() {
     let arg = App::new("Engraver")
@@ -213,14 +214,26 @@ fn main() {
     let cpu_threads = value_t!(matches, "cpu", u8).unwrap_or(0u8);
 
     let gpus = if matches.occurrences_of("gpu") > 0 {
-        let gpu = values_t!(matches, "gpu", String); //.unwrap_or(Vec::new());
-                                                     // if !gpu.is_empty() {
+        let gpu = values_t!(matches, "gpu", String);
         Some(gpu.unwrap())
-    //   } else {
-    //   None
-    // }
     } else {
         None
+    };
+
+    // work out number of cpu threads to use
+    let cores = sys_info::cpu_num().unwrap() as u8;
+    let cpu_threads = if cpu_threads == 0 {
+        cores
+    } else {
+        min(cores,cpu_threads)
+    };
+
+    // special case: dont use cpu if only a gpu is defined
+    #[cfg(feature = "opencl")]
+    let cpu_threads = if matches.occurrences_of("gpu") > 0 && matches.occurrences_of("cpu") == 0 {
+        0u8
+    } else {
+        cpu_threads
     };
 
     let p = Plotter::new();

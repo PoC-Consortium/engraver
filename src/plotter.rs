@@ -86,37 +86,11 @@ impl Plotter {
             println!("Engraver {} - PoC2 Plotter\n", crate_version!());
         }
 
-        // todo move this to main to reduce complexity
-
-        #[cfg(feature = "opencl")]
-        let gpu_count = match &task.gpus {
-            Some(x) => x.len(),
-            None => 0,
-        };
-        #[cfg(feature = "opencl")]
-        let cpu_threads = if gpu_count == 0 {
-            if task.cpu_threads == 0 {
-                cores
-            } else {
-                min(cores, u32::from(task.cpu_threads))
-            }
-        } else {
-            min(cores, u32::from(task.cpu_threads))
-        };
-        #[cfg(not(feature = "opencl"))]
-        let cpu_threads = if task.cpu_threads == 0 {
-            cores
-        } else {
-            min(cores, u32::from(task.cpu_threads))
-        };
-
-        task.cpu_threads = cpu_threads as u8;
-
         if !task.quiet {
             println!(
                 "CPU: {} [using {} of {} cores{}{}]",
                 cpu_name,
-                cpu_threads,
+                task.cpu_threads,
                 cores,
                 if simd_ext != "" { " + " } else { "" },
                 simd_ext
@@ -323,7 +297,7 @@ impl Plotter {
             create_scheduler_thread(
                 task.clone(),
                 rayon::ThreadPoolBuilder::new()
-                    .num_threads(cpu_threads as usize)
+                    .num_threads(task.cpu_threads as usize)
                     .start_handler(move |id| {
                         if thread_pinning {
                             #[cfg(not(windows))]
