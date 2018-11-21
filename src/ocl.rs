@@ -77,7 +77,8 @@ impl GpuContext {
         let queue_b = core::create_command_queue(&context, &device_id, None).unwrap();
         let kernel = core::create_kernel(&program, "calculate_nonces").unwrap();
         let kernel_workgroup_size = get_kernel_work_group_size(&kernel, device_id);
-        let workgroup_count = max_nonces_per_cache / kernel_workgroup_size;
+        //let workgroup_count = max_nonces_per_cache / kernel_workgroup_size;
+        let workgroup_count = 6;
         let worksize = kernel_workgroup_size * workgroup_count;
         let gdim1 = [worksize, 1, 1];
         let ldim1 = [kernel_workgroup_size, 1, 1];
