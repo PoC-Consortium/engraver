@@ -412,7 +412,6 @@ pub fn gpu_transfer_to_host(
     };
 
     // simd shabal words unpack + POC Shuffle + scatter nonces into optimised cache
-    // todo allow any multiple of nonces, not only x16
     unsafe {
         let buffer = from_raw_parts(buffer, gpu_context.worksize * NONCE_SIZE as usize);
         let iter: Vec<u64> = (0..transfer_task.local_nonces).step_by(16).collect();
@@ -431,7 +430,6 @@ pub fn gpu_transfer_to_host(
                             + (*n + k + transfer_task.chunk_offset) * SCOOP_SIZE
                             + (i & 1) * 32
                             + j) as usize;
-
                         let buffer_offset = (*n * NONCE_SIZE
                             + (i * 32 + j) * MSHABAL512_VECTOR_SIZE
                             + k * 4) as usize;

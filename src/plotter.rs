@@ -122,15 +122,6 @@ impl Plotter {
         if task.direct_io {
             let sector_size = get_sector_size(&task.output_path);
             nonces_per_sector = sector_size / SCOOP_SIZE;
-
-            // opencl requires buffer to be a multiple of 16 (data coalescence magic)
-            // todo remove and make all multiples work
-            #[cfg(feature = "opencl")]
-            let nonces_per_sector = if gpu {
-                max(16, nonces_per_sector)
-            } else {
-                nonces_per_sector
-            };
             if task.nonces % nonces_per_sector > 0 {
                 rounded_nonces_to_sector_size = true;
                 task.nonces /= nonces_per_sector;
