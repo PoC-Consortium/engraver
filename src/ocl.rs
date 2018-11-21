@@ -341,34 +341,7 @@ pub fn gpu_transfer_to_host(
 
     // get mem mapping
     let map = if gpu_context.mapping {
-        Some(
-            // map to host (zero copy buffer)
-            unsafe {
-                if buffer_id == 1 {
-                    core::enqueue_map_buffer::<u8, _, _, _>(
-                        &gpu_context.queue_b,
-                        &gpu_context.buffer_gpu_a,
-                        true,
-                        core::MAP_READ,
-                        0,
-                        gpu_context.gdim1[0] * NONCE_SIZE as usize,
-                        None::<Event>,
-                        None::<&mut Event>,
-                    ).unwrap()
-                } else {
-                    core::enqueue_map_buffer::<u8, _, _, _>(
-                        &gpu_context.queue_b,
-                        &gpu_context.buffer_gpu_b,
-                        true,
-                        core::MAP_READ,
-                        0,
-                        gpu_context.gdim1[0] * NONCE_SIZE as usize,
-                        None::<Event>,
-                        None::<&mut Event>,
-                    ).unwrap()
-                }
-            },
-        )
+        Some(mem_map_gpu_to_host(buffer_id, &gpu_context))
     } else {
         None
     };
@@ -385,81 +358,12 @@ pub fn gpu_transfer_to_host(
         };
         // copy to host
         let slice = unsafe { from_raw_parts_mut(ptr, gpu_context.worksize * NONCE_SIZE as usize) };
-        unsafe {
-            if buffer_id == 1 {
-                core::enqueue_read_buffer(
-                    &gpu_context.queue_b,
-                    &gpu_context.buffer_gpu_a,
-                    true,
-                    0,
-                    slice,
-                    None::<Event>,
-                    None::<&mut Event>,
-                ).unwrap();
-            } else {
-                core::enqueue_read_buffer(
-                    &gpu_context.queue_b,
-                    &gpu_context.buffer_gpu_b,
-                    true,
-                    0,
-                    slice,
-                    None::<Event>,
-                    None::<&mut Event>,
-                ).unwrap();
-            }
-        }
+        mem_transfer_gpu_to_host(buffer_id, &gpu_context, slice);
         ptr
     };
-
-    // simd shabal words unpack + POC Shuffle + scatter nonces into optimised cache
-    unsafe {
-        let buffer = from_raw_parts(buffer, gpu_context.worksize * NONCE_SIZE as usize);
-        let iter: Vec<u64> = (0..transfer_task.local_nonces).step_by(16).collect();
-        iter.par_iter().for_each(|n| {
-            // get global buffer
-            let data = from_raw_parts_mut(
-                transfer_task.cache.ptr,
-                NONCE_SIZE as usize * transfer_task.cache_size as usize,
-            );
-            for i in 0..(NUM_SCOOPS * 2) {
-                for j in (0..32).step_by(4) {
-                    for k in 0..MSHABAL512_VECTOR_SIZE {
-                        let data_offset = (((i & 1) * (4095 - (i >> 1)) + ((i + 1) & 1) * (i >> 1))
-                            * SCOOP_SIZE
-                            * transfer_task.cache_size
-                            + (*n + k + transfer_task.chunk_offset) * SCOOP_SIZE
-                            + (i & 1) * 32
-                            + j) as usize;
-                        let buffer_offset = (*n * NONCE_SIZE
-                            + (i * 32 + j) * MSHABAL512_VECTOR_SIZE
-                            + k * 4) as usize;
-                        data[data_offset..(data_offset + 4)]
-                            .clone_from_slice(&buffer[buffer_offset..(buffer_offset + 4)]);
-                    }
-                }
-            }
-        })
-    }
-    // unmap
+    unpack_shuffle_scatter(buffer, &gpu_context, &transfer_task);
     if gpu_context.mapping {
-        // map to host (zero copy buffer)
-        if buffer_id == 1 {
-            core::enqueue_unmap_mem_object(
-                &gpu_context.queue_a,
-                &gpu_context.buffer_gpu_a,
-                &map.unwrap(),
-                None::<Event>,
-                None::<&mut Event>,
-            ).unwrap()
-        } else {
-            core::enqueue_unmap_mem_object(
-                &gpu_context.queue_a,
-                &gpu_context.buffer_gpu_b,
-                &map.unwrap(),
-                None::<Event>,
-                None::<&mut Event>,
-            ).unwrap()
-        };
+        mem_unmap_gpu_to_host(buffer_id, &gpu_context, map);
         core::finish(&gpu_context.queue_a).unwrap();
     }
 }
@@ -472,36 +376,8 @@ pub fn gpu_hash_and_transfer_to_host(
 ) {
     let mut gpu_context = gpu_context.lock().unwrap();
 
-    // get mem mapping
     let map = if gpu_context.mapping {
-        Some(
-            // map to host (zero copy buffer)
-            unsafe {
-                if buffer_id == 1 {
-                    core::enqueue_map_buffer::<u8, _, _, _>(
-                        &gpu_context.queue_b,
-                        &gpu_context.buffer_gpu_a,
-                        true,
-                        core::MAP_READ,
-                        0,
-                        gpu_context.gdim1[0] * NONCE_SIZE as usize,
-                        None::<Event>,
-                        None::<&mut Event>,
-                    ).unwrap()
-                } else {
-                    core::enqueue_map_buffer::<u8, _, _, _>(
-                        &gpu_context.queue_b,
-                        &gpu_context.buffer_gpu_b,
-                        true,
-                        core::MAP_READ,
-                        0,
-                        gpu_context.gdim1[0] * NONCE_SIZE as usize,
-                        None::<Event>,
-                        None::<&mut Event>,
-                    ).unwrap()
-                }
-            },
-        )
+        Some(mem_map_gpu_to_host(buffer_id, &gpu_context))
     } else {
         None
     };
@@ -518,29 +394,7 @@ pub fn gpu_hash_and_transfer_to_host(
         };
         // copy to host
         let slice = unsafe { from_raw_parts_mut(ptr, gpu_context.worksize * NONCE_SIZE as usize) };
-        unsafe {
-            if buffer_id == 1 {
-                core::enqueue_read_buffer(
-                    &gpu_context.queue_b,
-                    &gpu_context.buffer_gpu_a,
-                    true,
-                    0,
-                    slice,
-                    None::<Event>,
-                    None::<&mut Event>,
-                ).unwrap();
-            } else {
-                core::enqueue_read_buffer(
-                    &gpu_context.queue_b,
-                    &gpu_context.buffer_gpu_b,
-                    true,
-                    0,
-                    slice,
-                    None::<Event>,
-                    None::<&mut Event>,
-                ).unwrap();
-            }
-        }
+        mem_transfer_gpu_to_host(buffer_id, &gpu_context, slice);
         ptr
     };
 
@@ -594,9 +448,90 @@ pub fn gpu_hash_and_transfer_to_host(
         }
     }
     core::finish(&gpu_context.queue_b).unwrap();
+    unpack_shuffle_scatter(buffer, &gpu_context, &transfer_task);
+    if gpu_context.mapping {
+        mem_unmap_gpu_to_host(buffer_id, &gpu_context, map);
+    }
+    core::finish(&gpu_context.queue_a).unwrap();
+}
 
-    // simd shabal words unpack + POC Shuffle + scatter nonces into optimised cache
-    // todo remove duplicate code parts
+fn mem_map_gpu_to_host(buffer_id: u8, gpu_context: &GpuContext) -> core::MemMap<u8> {
+    unsafe {
+        if buffer_id == 1 {
+            core::enqueue_map_buffer::<u8, _, _, _>(
+                &gpu_context.queue_b,
+                &gpu_context.buffer_gpu_a,
+                true,
+                core::MAP_READ,
+                0,
+                gpu_context.gdim1[0] * NONCE_SIZE as usize,
+                None::<Event>,
+                None::<&mut Event>,
+            ).unwrap()
+        } else {
+            core::enqueue_map_buffer::<u8, _, _, _>(
+                &gpu_context.queue_b,
+                &gpu_context.buffer_gpu_b,
+                true,
+                core::MAP_READ,
+                0,
+                gpu_context.gdim1[0] * NONCE_SIZE as usize,
+                None::<Event>,
+                None::<&mut Event>,
+            ).unwrap()
+        }
+    }
+}
+
+fn mem_unmap_gpu_to_host(buffer_id: u8, gpu_context: &GpuContext, map: Option<core::MemMap<u8>>) {
+    // map to host (zero copy buffer)
+    if buffer_id == 1 {
+        core::enqueue_unmap_mem_object(
+            &gpu_context.queue_a,
+            &gpu_context.buffer_gpu_a,
+            &map.unwrap(),
+            None::<Event>,
+            None::<&mut Event>,
+        ).unwrap()
+    } else {
+        core::enqueue_unmap_mem_object(
+            &gpu_context.queue_a,
+            &gpu_context.buffer_gpu_b,
+            &map.unwrap(),
+            None::<Event>,
+            None::<&mut Event>,
+        ).unwrap()
+    };
+}
+
+fn mem_transfer_gpu_to_host(buffer_id: u8, gpu_context: &GpuContext, slice: &mut [u8]) {
+    unsafe {
+        if buffer_id == 1 {
+            core::enqueue_read_buffer(
+                &gpu_context.queue_b,
+                &gpu_context.buffer_gpu_a,
+                true,
+                0,
+                slice,
+                None::<Event>,
+                None::<&mut Event>,
+            ).unwrap();
+        } else {
+            core::enqueue_read_buffer(
+                &gpu_context.queue_b,
+                &gpu_context.buffer_gpu_b,
+                true,
+                0,
+                slice,
+                None::<Event>,
+                None::<&mut Event>,
+            ).unwrap();
+        }
+    }
+}
+
+// simd shabal words unpack + POC Shuffle + scatter nonces into optimised cache
+fn unpack_shuffle_scatter(buffer: *const u8, gpu_context: &GpuContext, transfer_task: &GpuTask) {
     unsafe {
         let buffer = from_raw_parts(buffer, gpu_context.worksize * NONCE_SIZE as usize);
         let iter: Vec<u64> = (0..transfer_task.local_nonces).step_by(16).collect();
@@ -615,7 +550,6 @@ pub fn gpu_hash_and_transfer_to_host(
                             + (*n + k + transfer_task.chunk_offset) * SCOOP_SIZE
                             + (i & 1) * 32
                             + j) as usize;
-
                         let buffer_offset = (*n * NONCE_SIZE
                             + (i * 32 + j) * MSHABAL512_VECTOR_SIZE
                             + k * 4) as usize;
@@ -626,26 +560,4 @@ pub fn gpu_hash_and_transfer_to_host(
             }
         })
     }
-    // unmap
-    if gpu_context.mapping {
-        // map to host (zero copy buffer)
-        if buffer_id == 1 {
-            core::enqueue_unmap_mem_object(
-                &gpu_context.queue_a,
-                &gpu_context.buffer_gpu_a,
-                &map.unwrap(),
-                None::<Event>,
-                None::<&mut Event>,
-            ).unwrap()
-        } else {
-            core::enqueue_unmap_mem_object(
-                &gpu_context.queue_a,
-                &gpu_context.buffer_gpu_b,
-                &map.unwrap(),
-                None::<Event>,
-                None::<&mut Event>,
-            ).unwrap()
-        };
-    }
-    core::finish(&gpu_context.queue_a).unwrap();
 }

@@ -24,8 +24,8 @@ use clap::AppSettings::{ArgRequiredElseHelp, DeriveDisplayOrder, VersionlessSubc
 use clap::ArgGroup;
 use clap::{App, Arg};
 use plotter::{Plotter, PlotterTask};
-use utils::set_low_prio;
 use std::cmp::min;
+use utils::set_low_prio;
 
 fn main() {
     let arg = App::new("Engraver")
@@ -225,7 +225,7 @@ fn main() {
     let cpu_threads = if cpu_threads == 0 {
         cores
     } else {
-        min(cores,cpu_threads)
+        min(cores, cpu_threads)
     };
 
     // special case: dont use cpu if only a gpu is defined
