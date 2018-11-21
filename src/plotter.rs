@@ -48,6 +48,7 @@ pub struct PlotterTask {
     pub direct_io: bool,
     pub async_io: bool,
     pub quiet: bool,
+    pub benchmark: bool,
     pub zcb: bool,
 }
 
@@ -84,6 +85,10 @@ impl Plotter {
 
         if !task.quiet {
             println!("Engraver {} - PoC2 Plotter\n", crate_version!());
+        }
+
+        if !task.quiet && task.benchmark {
+            println!("*BENCHMARK MODE*\n");
         }
 
         if !task.quiet {
@@ -146,9 +151,9 @@ impl Plotter {
         }
 
         // check available disk space
-        if free_disk_space < plotsize && !file.exists() {
+        if free_disk_space < plotsize && !file.exists() && !task.benchmark {
             println!(
-                "Error: insufficient disk space, MiB_required={}, MiB_available={}",
+                "Error: insufficient disk space, MiB_required={:.2}, MiB_available={:.2}",
                 plotsize as f64 / 1024.0 / 1024.0,
                 free_disk_space as f64 / 1024.0 / 1024.0
             );
@@ -208,10 +213,10 @@ impl Plotter {
             if !task.quiet {
                 print!("Fast file pre-allocation...");
             }
-
-            preallocate(&file, plotsize, task.direct_io);
-            write_resume_info(&file, 0u64);
-
+            if !task.benchmark {
+                preallocate(&file, plotsize, task.direct_io);
+                write_resume_info(&file, 0u64);
+            }
             if !task.quiet {
                 println!("OK");
             }

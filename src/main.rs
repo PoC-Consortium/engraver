@@ -62,6 +62,12 @@ fn main() {
                 .long("quiet")
                 .help("Runs engraver in non-verbose mode")
                 .global(true),
+        ).arg(
+            Arg::with_name("benchmark")
+                .short("b")
+                .long("bench")
+                .help("Runs engraver in xPU benchmark mode")
+                .global(true),
         )
         /*
         .subcommand(
@@ -248,6 +254,7 @@ fn main() {
         direct_io: !matches.is_present("disable direct i/o"),
         async_io: !matches.is_present("disable async i/o"),
         quiet: matches.is_present("non-verbosity"),
+        benchmark: matches.is_present("benchmark"),
         zcb: matches.is_present("zero-copy"),
     });
 }

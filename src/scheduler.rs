@@ -157,6 +157,17 @@ pub fn create_scheduler_thread(
                                 #[cfg(feature = "opencl")]
                                 let task_size =
                                     min(gpu.worksize as u64, nonces_to_hash - requested);
+
+                                // optimisation: leave some work for cpu in dual mode
+                                #[cfg(feature = "opencl")]
+                                let task_size = if task_size < gpu.worksize as u64
+                                    && task_size > CPU_TASK_SIZE
+                                {
+                                    task_size / 2
+                                } else {
+                                    task_size
+                                };
+
                                 #[cfg(not(feature = "opencl"))]
                                 let task_size = 0;
 
