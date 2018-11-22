@@ -10,10 +10,11 @@ use self::raw_cpuid::CpuId;
 use chan;
 use core_affinity;
 #[cfg(feature = "opencl")]
-use ocl::gpu_show_info;
+use ocl::gpu_get_info;
 use scheduler::create_scheduler_thread;
 use std::cmp::{max, min};
 use std::path::Path;
+use std::process;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use stopwatch::Stopwatch;
@@ -102,13 +103,20 @@ impl Plotter {
             );
         }
 
+        #[cfg(not(feature = "opencl"))]
+        let gpu_mem_needed = 0u64;
         #[cfg(feature = "opencl")]
-        match &task.gpus {
-            Some(x) => if !task.quiet {
-                gpu_show_info(&x)
-            },
-            None => (),
-        }
+        let gpu_mem_needed = match &task.gpus {
+            Some(x) => gpu_get_info(&x, task.quiet),
+            None => 0,
+        };
+
+        #[cfg(feature = "opencl")]
+        let gpu_mem_needed = if task.zcb {
+            gpu_mem_needed
+        } else {
+            gpu_mem_needed / 2
+        };
 
         // use all avaiblable disk space if nonce parameter has been omitted
         let free_disk_space = free_disk_space(&task.output_path);
@@ -162,17 +170,25 @@ impl Plotter {
         }
 
         // calculate memory usage
-        let mem = match calculate_mem_to_use(&task, &memory, nonces_per_sector, gpu) {
+        let mem = match calculate_mem_to_use(&task, &memory, nonces_per_sector, gpu, gpu_mem_needed)
+        {
             Ok(x) => x,
             Err(_) => return,
         };
 
         if !task.quiet {
             println!(
-                "RAM: Total={:.2} GiB, Free={:.2} GiB, Usage={:.2} GiB \n",
+                "RAM: Total={:.2} GiB, Free={:.2} GiB, Usage={:.2} GiB",
                 memory.total as f64 / 1024.0 / 1024.0,
                 memory.free as f64 / 1024.0 / 1024.0,
-                mem as f64 / 1024.0 / 1024.0 / 1024.0
+                (mem + gpu_mem_needed) as f64 / 1024.0 / 1024.0 / 1024.0
+            );
+
+            #[cfg(feature = "opencl")]
+            println!(
+                "     HDDcache={:.2} GiB, GPUcache={:.2} GiB,\n",
+                mem as f64 / 1024.0 / 1024.0 / 1024.0,
+                gpu_mem_needed as f64 / 1024.0 / 1024.0 / 1024.0
             );
 
             println!("Numeric ID:  {}", task.numeric_id);
@@ -353,6 +369,7 @@ fn calculate_mem_to_use(
     memory: &sys_info::MemInfo,
     nonces_per_sector: u64,
     gpu: bool,
+    gpu_mem_needed: u64,
 ) -> Result<u64, &'static str> {
     let plotsize = task.nonces * NONCE_SIZE;
 
@@ -370,11 +387,20 @@ fn calculate_mem_to_use(
             return Err("invalid unit");
         }
     };
+    if gpu && mem > 0 && mem < gpu_mem_needed + nonces_per_sector * NONCE_SIZE {
+        println!("Error: Insufficient host memory for GPU plotting!");
+        println!("Shutting down...");
+        process::exit(0);
+    }
+
+    if gpu && mem > 0 {
+        mem -= gpu_mem_needed;
+    }
 
     if mem == 0 {
         mem = plotsize;
     }
-    mem = min(mem, plotsize);
+    mem = min(mem, plotsize + gpu_mem_needed);
 
     // opencl requires buffer to be a multiple of 16 (data coalescence magic)
     let nonces_per_sector = if gpu {
@@ -384,7 +410,7 @@ fn calculate_mem_to_use(
     };
 
     // don't exceed free memory and leave some elbow room 1-1000/1024
-    mem = min(mem, memory.free * 1000);
+    mem = min(mem, memory.free * 1000 - gpu_mem_needed);
 
     // rounding single/double buffer
     let num_buffer = if task.async_io { 2 } else { 1 };
@@ -392,7 +418,10 @@ fn calculate_mem_to_use(
     mem *= num_buffer * NONCE_SIZE * nonces_per_sector;
 
     // ensure a minimum buffer
-    mem = max(mem, num_buffer * NONCE_SIZE * nonces_per_sector);
+    mem = max(
+        mem,
+        num_buffer * NONCE_SIZE * nonces_per_sector + gpu_mem_needed,
+    );
     Ok(mem)
 }
 
