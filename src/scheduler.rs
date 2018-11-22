@@ -160,7 +160,7 @@ pub fn create_scheduler_thread(
 
                                 // optimisation: leave some work for cpu in dual mode
                                 #[cfg(feature = "opencl")]
-                                let task_size = if task_size < gpu.worksize as u64
+                                let task_size = if task_size < gpu.worksize as u64 && task.cpu_threads > 0
                                     && task_size > CPU_TASK_SIZE
                                 {
                                     task_size / 2
