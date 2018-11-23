@@ -420,7 +420,7 @@ fn calculate_mem_to_use(
     // ensure a minimum buffer
     mem = max(
         mem,
-        num_buffer * NONCE_SIZE * nonces_per_sector + gpu_mem_needed,
+        num_buffer * NONCE_SIZE * nonces_per_sector,
     );
     Ok(mem)
 }
