@@ -198,11 +198,6 @@ pub fn gpu_get_info(gpus: &[String], quiet: bool) -> u64 {
             process::exit(0);
         }
         let device = device_ids[gpu_id];
-        let max_workgroup_size =
-            match core::get_device_info(&device, DeviceInfo::MaxWorkGroupSize).unwrap() {
-                core::DeviceInfoResult::MaxWorkGroupSize(wgs) => wgs,
-                _ => panic!("Unexpected error. Can't obtain GPU max workgroup size."),
-            };
         let max_compute_units =
             match core::get_device_info(&device, DeviceInfo::MaxComputeUnits).unwrap() {
                 core::DeviceInfoResult::MaxComputeUnits(mcu) => mcu,
@@ -213,12 +208,28 @@ pub fn gpu_get_info(gpus: &[String], quiet: bool) -> u64 {
             _ => panic!("Unexpected error. Can't obtain GPU memory size."),
         };
 
+        // get work_group_size for kernel
+        let context_properties = ContextProperties::new().platform(platform);
+        let context =
+            core::create_context(Some(&context_properties), &[device], None, None).unwrap();
+        let src_cstring = CString::new(SRC).unwrap();
+        let program = core::create_program_with_source(&context, &[src_cstring]).unwrap();
+        core::build_program(
+            &program,
+            None::<&[()]>,
+            &CString::new("").unwrap(),
+            None,
+            None,
+        ).unwrap();
+        let kernel = core::create_kernel(&program, "calculate_nonces").unwrap();
+        let kernel_workgroup_size = get_kernel_work_group_size(&kernel, device);
+
         let gpu_cores = if gpu_cores == 0 {
             max_compute_units as usize
         } else {
             min(gpu_cores, max_compute_units as usize)
         };
-        let mem_needed = 2 * gpu_cores * max_workgroup_size * 256 * 1024;
+        let mem_needed = 2 * gpu_cores * kernel_workgroup_size * 256 * 1024;
 
         if mem_needed > mem as usize {
             println!("Error: Not enough GPU-memory. Please reduce number of cores.");
