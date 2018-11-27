@@ -5,6 +5,8 @@ using System.Threading;
 using System.Windows.Forms;
 using System.Text.RegularExpressions;
 using System.Runtime.InteropServices;
+using System.Management;
+using OpenCL.Net;
 
 namespace EngraverGui
 {
@@ -252,11 +254,12 @@ namespace EngraverGui
         private void EngraverForm_Load(object sender, EventArgs e)
         {
             //check for exe
-            if (File.Exists(Environment.CurrentDirectory + "\\engraver.exe"))
+            if (File.Exists(System.Environment.CurrentDirectory + "\\engraver.exe"))
             {
                 LoadSettings();
                 UpdateDriveInfo();
                 UpdateNoncesToPlot();
+                get_devices();
             }
             else
             {
@@ -285,14 +288,14 @@ namespace EngraverGui
             outputFolder.Text = Properties.Settings.Default.path;
             ntpValue.Checked = !Properties.Settings.Default.maxnonces;
             ntpmax.Checked = Properties.Settings.Default.maxnonces;
-            Console.WriteLine(Properties.Settings.Default.nonces.ToString());
             nonces.Value = backup;
-            threads.Value = Properties.Settings.Default.threads;
             mem.Value = Properties.Settings.Default.mem;
-            threadlimit.Checked = Properties.Settings.Default.threadlimit;
             lowprio.Checked = Properties.Settings.Default.lowprio;
             memlimit.Checked = Properties.Settings.Default.memlimit;
+            benchmark.Checked = Properties.Settings.Default.bench;
+            zcb.Checked = Properties.Settings.Default.zcb;
         }
+
 
         // start plotting
         private void start_Click(object sender, EventArgs e)
@@ -318,11 +321,25 @@ namespace EngraverGui
                         break;
                 }
                 features = "";
-                if (threadlimit.Checked) features += " -c " + threads.Value.ToString();
                 if (memlimit.Checked) features += " -m " + mem.Value.ToString() + "MiB";
                 if (!directio.Checked) features += " -d";
                 if (!asyncio.Checked) features += " -a";
                 if (lowprio.Checked) features += " -l";
+                if (benchmark.Checked) features += " -b";
+                if (zcb.Checked) features += " -z";
+
+                // read cpu + gpu
+                if ((bool)devices.Rows[0].Cells[0].Value)
+                {
+                     features += " -c "+ devices.Rows[0].Cells[3].Value.ToString();
+                }
+                for (int i = 1; i < devices.Rows.Count; i++)
+                {
+                    if ((bool)devices.Rows[i].Cells[0].Value)
+                    {
+                        features += " -g " + devices.Rows[i].Cells[1].Value.ToString().Substring(4,3) +":"+ devices.Rows[i].Cells[3].Value.ToString();
+                    }
+                }
 
 
                 // start control thread
@@ -377,7 +394,7 @@ namespace EngraverGui
                         //RedirectStandardInput = true,
                         RedirectStandardOutput = true,
                         UseShellExecute = false,
-                        WorkingDirectory = Environment.CurrentDirectory,
+                        WorkingDirectory = System.Environment.CurrentDirectory,
                         CreateNoWindow = true // silent
                     };
 
@@ -419,12 +436,6 @@ namespace EngraverGui
         private void numericID_TextChanged(object sender, EventArgs e)
         {
             Properties.Settings.Default.ID = numericID.Text;
-            Properties.Settings.Default.Save();
-        }
-
-        private void threads_ValueChanged(object sender, EventArgs e)
-        {
-            Properties.Settings.Default.threads = (int)threads.Value;
             Properties.Settings.Default.Save();
         }
 
@@ -606,19 +617,6 @@ namespace EngraverGui
             ntp_ValueChanged(null, null);
         }
 
-        private void threadlimit_CheckedChanged(object sender, EventArgs e)
-        {
-            if (threadlimit.Checked)
-            {
-                threads.Enabled = true;
-            } else
-            {
-                threads.Enabled = false;
-            }
-            Properties.Settings.Default.threadlimit = threadlimit.Checked;
-            Properties.Settings.Default.Save();
-        }
-
         private void lowprio_CheckedChanged(object sender, EventArgs e)
         {
             Properties.Settings.Default.lowprio = lowprio.Checked;
@@ -674,7 +672,7 @@ namespace EngraverGui
                 DriveInfo drive = new DriveInfo(file.Directory.Root.FullName);
                 GetDiskFreeSpace(drive.Name, out SectorsPerCluster, out BytesPerSector, out NumberOfFreeClusters, out TotalNumberOfClusters);
             }
-            catch (Exception e)
+            catch (Exception)
             {
             }
             return BytesPerSector;
@@ -702,6 +700,120 @@ namespace EngraverGui
                     Application.Exit();
                 }
             }
+        }
+
+        private void button4_Click(object sender, EventArgs e)
+        {
+            get_devices();
+        }
+
+        private void get_devices()
+        {
+            // get CPUs
+            ManagementObjectSearcher mos =
+                new ManagementObjectSearcher("root\\CIMV2", "SELECT * FROM Win32_Processor");
+            foreach (ManagementObject mo in mos.Get())
+            {
+                devices.Rows.Add(Properties.Settings.Default.cpu, "CPU: " + mo["Name"], mo["NumberOfLogicalProcessors"], Properties.Settings.Default.cpulimit);
+                break;
+            }
+
+            // get GPUs
+            ErrorCode error;
+            Platform[] platforms = Cl.GetPlatformIDs(out error);
+            for (int i = 0;i < platforms.Length;i++) {
+                Device[] gpus = Cl.GetDeviceIDs(platforms[i], DeviceType.All, out error);
+                for(int j = 0; j < Math.Min(4,gpus.Length);j ++)
+                {
+                    bool active = false;
+                    int threads = 0;
+                    if (j == 0)
+                    {
+                        active = Properties.Settings.Default.gpu1;
+                        threads = Properties.Settings.Default.gpu1limit;
+                    }
+                    if (j == 1)
+                    {
+                        active = Properties.Settings.Default.gpu2;
+                        threads = Properties.Settings.Default.gpu2limit;
+                    }
+                    if (j == 2)
+                    {
+                        active = Properties.Settings.Default.gpu3;
+                        threads = Properties.Settings.Default.gpu3limit;
+                    }
+                    if (j == 3)
+                    {
+                        active = Properties.Settings.Default.gpu4;
+                        threads = Properties.Settings.Default.gpu4limit;
+                    }
+                    devices.Rows.Add(active, "GPU[" + i.ToString() + ":" + j.ToString() + "]: " + Cl.GetDeviceInfo(gpus[j], DeviceInfo.Name, out error), Cl.GetDeviceInfo(gpus[j], DeviceInfo.MaxComputeUnits, out error).CastTo<uint>(), threads);
+                }
+            }
+        }
+
+        private void devices_CellValidating(object sender, DataGridViewCellValidatingEventArgs e)
+        {
+            if (e.ColumnIndex == 3)
+            {
+                uint i;
+                if (!uint.TryParse(Convert.ToString(e.FormattedValue), out i))
+                {
+                    MessageBox.Show("Please enter a value between 0 and " + devices.Rows[e.RowIndex].Cells[e.ColumnIndex - 1].Value.ToString(), "Invalid Input", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    e.Cancel = true;
+                }
+                else
+                {                    
+                    if (i > (uint)devices.Rows[e.RowIndex].Cells[e.ColumnIndex - 1].Value)
+                    {
+                        MessageBox.Show("Please enter a value between 0 and " + devices.Rows[e.RowIndex].Cells[e.ColumnIndex - 1].Value.ToString(), "Invalid Input", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        e.Cancel = true;
+                    }
+                }
+            }
+        }
+
+        private void benchmark_CheckedChanged(object sender, EventArgs e)
+        {
+            Properties.Settings.Default.bench = benchmark.Checked;
+            Properties.Settings.Default.Save();
+        }
+
+        private void zcb_CheckedChanged(object sender, EventArgs e)
+        {
+            Properties.Settings.Default.zcb = zcb.Checked;
+            Properties.Settings.Default.Save();
+        }
+
+        private void devices_CellValueChanged(object sender, DataGridViewCellEventArgs e)
+        {
+            save_devices();
+        }
+
+        private void save_devices()
+        {
+            int num = devices.Rows.Count;
+            if (num >= 5) {
+                Properties.Settings.Default.gpu4 = (bool)devices.Rows[4].Cells[0].Value;
+                Properties.Settings.Default.gpu4limit = Int32.Parse(devices.Rows[4].Cells[3].Value.ToString());
+            }
+            if (num >= 4) {
+                Properties.Settings.Default.gpu3 = (bool)devices.Rows[3].Cells[0].Value;
+                Properties.Settings.Default.gpu3limit = Int32.Parse(devices.Rows[3].Cells[3].Value.ToString());
+            }
+            if (num >= 3) {
+                Properties.Settings.Default.gpu2 = (bool)devices.Rows[2].Cells[0].Value;
+                Properties.Settings.Default.gpu2limit = Int32.Parse(devices.Rows[2].Cells[3].Value.ToString());
+            }
+            if (num >= 2) {
+                Properties.Settings.Default.gpu1 = (bool)devices.Rows[1].Cells[0].Value;
+                Properties.Settings.Default.gpu1limit = Int32.Parse(devices.Rows[1].Cells[3].Value.ToString());
+            }
+            if (num >= 1) {
+                Properties.Settings.Default.cpu = (bool)devices.Rows[0].Cells[0].Value;
+                Properties.Settings.Default.cpulimit = Int32.Parse(devices.Rows[0].Cells[3].Value.ToString());
+            }
+            Properties.Settings.Default.Save();
         }
     }
 }

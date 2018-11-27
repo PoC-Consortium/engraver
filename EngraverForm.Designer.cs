@@ -29,6 +29,8 @@
         private void InitializeComponent()
         {
             this.components = new System.ComponentModel.Container();
+            System.Windows.Forms.DataGridViewCellStyle dataGridViewCellStyle1 = new System.Windows.Forms.DataGridViewCellStyle();
+            System.Windows.Forms.DataGridViewCellStyle dataGridViewCellStyle2 = new System.Windows.Forms.DataGridViewCellStyle();
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(EngraverForm));
             this.folderBrowserDialog = new System.Windows.Forms.FolderBrowserDialog();
             this.openFileDialog = new System.Windows.Forms.OpenFileDialog();
@@ -74,18 +76,23 @@
             this.label8 = new System.Windows.Forms.Label();
             this.label5 = new System.Windows.Forms.Label();
             this.tabPage2 = new System.Windows.Forms.TabPage();
-            this.label4 = new System.Windows.Forms.Label();
+            this.devices = new System.Windows.Forms.DataGridView();
+            this.Column1 = new System.Windows.Forms.DataGridViewCheckBoxColumn();
+            this.Column2 = new System.Windows.Forms.DataGridViewTextBoxColumn();
+            this.Column3 = new System.Windows.Forms.DataGridViewTextBoxColumn();
+            this.Column4 = new System.Windows.Forms.DataGridViewTextBoxColumn();
+            this.zcb = new System.Windows.Forms.CheckBox();
+            this.label7 = new System.Windows.Forms.Label();
+            this.label6 = new System.Windows.Forms.Label();
+            this.benchmark = new System.Windows.Forms.CheckBox();
             this.lowprio = new System.Windows.Forms.CheckBox();
             this.asyncio = new System.Windows.Forms.CheckBox();
             this.directio = new System.Windows.Forms.CheckBox();
             this.label2 = new System.Windows.Forms.Label();
             this.label1 = new System.Windows.Forms.Label();
             this.memlimit = new System.Windows.Forms.CheckBox();
-            this.threadlimit = new System.Windows.Forms.CheckBox();
-            this.lbl_CPURAM = new System.Windows.Forms.Label();
             this.lbl_RAM2 = new System.Windows.Forms.Label();
             this.mem = new System.Windows.Forms.NumericUpDown();
-            this.threads = new System.Windows.Forms.NumericUpDown();
             this.toolTips = new System.Windows.Forms.ToolTip(this.components);
             this.statusStrip.SuspendLayout();
             this.menuStrip1.SuspendLayout();
@@ -94,8 +101,8 @@
             ((System.ComponentModel.ISupportInitialize)(this.startnonce)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.nonces)).BeginInit();
             this.tabPage2.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)(this.devices)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.mem)).BeginInit();
-            ((System.ComponentModel.ISupportInitialize)(this.threads)).BeginInit();
             this.SuspendLayout();
             // 
             // openFileDialog
@@ -513,18 +520,19 @@
             // 
             // tabPage2
             // 
-            this.tabPage2.Controls.Add(this.label4);
+            this.tabPage2.Controls.Add(this.devices);
+            this.tabPage2.Controls.Add(this.zcb);
+            this.tabPage2.Controls.Add(this.label7);
+            this.tabPage2.Controls.Add(this.label6);
+            this.tabPage2.Controls.Add(this.benchmark);
             this.tabPage2.Controls.Add(this.lowprio);
             this.tabPage2.Controls.Add(this.asyncio);
             this.tabPage2.Controls.Add(this.directio);
             this.tabPage2.Controls.Add(this.label2);
             this.tabPage2.Controls.Add(this.label1);
             this.tabPage2.Controls.Add(this.memlimit);
-            this.tabPage2.Controls.Add(this.threadlimit);
-            this.tabPage2.Controls.Add(this.lbl_CPURAM);
             this.tabPage2.Controls.Add(this.lbl_RAM2);
             this.tabPage2.Controls.Add(this.mem);
-            this.tabPage2.Controls.Add(this.threads);
             this.tabPage2.Location = new System.Drawing.Point(4, 22);
             this.tabPage2.Name = "tabPage2";
             this.tabPage2.Padding = new System.Windows.Forms.Padding(3);
@@ -533,19 +541,113 @@
             this.tabPage2.Text = "Advanced Settings";
             this.tabPage2.UseVisualStyleBackColor = true;
             // 
-            // label4
+            // devices
             // 
-            this.label4.AutoSize = true;
-            this.label4.Location = new System.Drawing.Point(222, 15);
-            this.label4.Name = "label4";
-            this.label4.Size = new System.Drawing.Size(42, 13);
-            this.label4.TabIndex = 3;
-            this.label4.Text = "threads";
+            this.devices.AllowUserToAddRows = false;
+            this.devices.AllowUserToDeleteRows = false;
+            this.devices.AllowUserToResizeColumns = false;
+            this.devices.AllowUserToResizeRows = false;
+            this.devices.AutoSizeColumnsMode = System.Windows.Forms.DataGridViewAutoSizeColumnsMode.Fill;
+            this.devices.ColumnHeadersHeightSizeMode = System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize;
+            this.devices.Columns.AddRange(new System.Windows.Forms.DataGridViewColumn[] {
+            this.Column1,
+            this.Column2,
+            this.Column3,
+            this.Column4});
+            this.devices.EditMode = System.Windows.Forms.DataGridViewEditMode.EditOnEnter;
+            this.devices.Location = new System.Drawing.Point(16, 36);
+            this.devices.MultiSelect = false;
+            this.devices.Name = "devices";
+            this.devices.RowHeadersVisible = false;
+            this.devices.ScrollBars = System.Windows.Forms.ScrollBars.Vertical;
+            this.devices.Size = new System.Drawing.Size(558, 108);
+            this.devices.TabIndex = 24;
+            this.toolTips.SetToolTip(this.devices, "chose hashing devices and optionally limit the number of threads to use");
+            this.devices.CellValidating += new System.Windows.Forms.DataGridViewCellValidatingEventHandler(this.devices_CellValidating);
+            this.devices.CellValueChanged += new System.Windows.Forms.DataGridViewCellEventHandler(this.devices_CellValueChanged);
+            // 
+            // Column1
+            // 
+            this.Column1.FillWeight = 60.9137F;
+            this.Column1.HeaderText = "Enabled";
+            this.Column1.Name = "Column1";
+            this.Column1.Resizable = System.Windows.Forms.DataGridViewTriState.True;
+            // 
+            // Column2
+            // 
+            dataGridViewCellStyle1.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(224)))), ((int)(((byte)(224)))), ((int)(((byte)(224)))));
+            this.Column2.DefaultCellStyle = dataGridViewCellStyle1;
+            this.Column2.FillWeight = 205.9229F;
+            this.Column2.HeaderText = "Device";
+            this.Column2.Name = "Column2";
+            this.Column2.ReadOnly = true;
+            this.Column2.SortMode = System.Windows.Forms.DataGridViewColumnSortMode.NotSortable;
+            // 
+            // Column3
+            // 
+            dataGridViewCellStyle2.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(224)))), ((int)(((byte)(224)))), ((int)(((byte)(224)))));
+            this.Column3.DefaultCellStyle = dataGridViewCellStyle2;
+            this.Column3.FillWeight = 66.58172F;
+            this.Column3.HeaderText = "Cores";
+            this.Column3.Name = "Column3";
+            this.Column3.ReadOnly = true;
+            this.Column3.SortMode = System.Windows.Forms.DataGridViewColumnSortMode.NotSortable;
+            // 
+            // Column4
+            // 
+            this.Column4.FillWeight = 66.58172F;
+            this.Column4.HeaderText = "Thread Limit";
+            this.Column4.Name = "Column4";
+            this.Column4.SortMode = System.Windows.Forms.DataGridViewColumnSortMode.NotSortable;
+            // 
+            // zcb
+            // 
+            this.zcb.AutoSize = true;
+            this.zcb.Location = new System.Drawing.Point(273, 223);
+            this.zcb.Name = "zcb";
+            this.zcb.Size = new System.Drawing.Size(146, 17);
+            this.zcb.TabIndex = 22;
+            this.zcb.Text = "GPU Zero Copy Buffering";
+            this.toolTips.SetToolTip(this.zcb, "use zero copy buffers - enable this if you are using GPUs with shared memory");
+            this.zcb.UseVisualStyleBackColor = true;
+            this.zcb.CheckedChanged += new System.EventHandler(this.zcb_CheckedChanged);
+            // 
+            // label7
+            // 
+            this.label7.AutoSize = true;
+            this.label7.Font = new System.Drawing.Font("Microsoft Sans Serif", 8.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.label7.Location = new System.Drawing.Point(11, 15);
+            this.label7.Name = "label7";
+            this.label7.Size = new System.Drawing.Size(29, 13);
+            this.label7.TabIndex = 15;
+            this.label7.Text = "XPU";
+            // 
+            // label6
+            // 
+            this.label6.AutoSize = true;
+            this.label6.Font = new System.Drawing.Font("Microsoft Sans Serif", 8.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.label6.Location = new System.Drawing.Point(12, 224);
+            this.label6.Name = "label6";
+            this.label6.Size = new System.Drawing.Size(29, 13);
+            this.label6.TabIndex = 14;
+            this.label6.Text = "OPT";
+            // 
+            // benchmark
+            // 
+            this.benchmark.AutoSize = true;
+            this.benchmark.Location = new System.Drawing.Point(149, 223);
+            this.benchmark.Name = "benchmark";
+            this.benchmark.Size = new System.Drawing.Size(109, 17);
+            this.benchmark.TabIndex = 13;
+            this.benchmark.Text = "Benchmark mode";
+            this.toolTips.SetToolTip(this.benchmark, "enable benchmark mode");
+            this.benchmark.UseVisualStyleBackColor = true;
+            this.benchmark.CheckedChanged += new System.EventHandler(this.benchmark_CheckedChanged);
             // 
             // lowprio
             // 
             this.lowprio.AutoSize = true;
-            this.lowprio.Location = new System.Drawing.Point(63, 37);
+            this.lowprio.Location = new System.Drawing.Point(60, 223);
             this.lowprio.Name = "lowprio";
             this.lowprio.Size = new System.Drawing.Size(79, 17);
             this.lowprio.TabIndex = 4;
@@ -559,7 +661,7 @@
             this.asyncio.AutoSize = true;
             this.asyncio.Checked = true;
             this.asyncio.CheckState = System.Windows.Forms.CheckState.Checked;
-            this.asyncio.Location = new System.Drawing.Point(152, 102);
+            this.asyncio.Location = new System.Drawing.Point(149, 191);
             this.asyncio.Name = "asyncio";
             this.asyncio.Size = new System.Drawing.Size(74, 17);
             this.asyncio.TabIndex = 11;
@@ -573,7 +675,7 @@
             this.directio.AutoSize = true;
             this.directio.Checked = true;
             this.directio.CheckState = System.Windows.Forms.CheckState.Checked;
-            this.directio.Location = new System.Drawing.Point(63, 102);
+            this.directio.Location = new System.Drawing.Point(60, 191);
             this.directio.Name = "directio";
             this.directio.Size = new System.Drawing.Size(73, 17);
             this.directio.TabIndex = 10;
@@ -585,7 +687,8 @@
             // label2
             // 
             this.label2.AutoSize = true;
-            this.label2.Location = new System.Drawing.Point(15, 103);
+            this.label2.Font = new System.Drawing.Font("Microsoft Sans Serif", 8.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.label2.Location = new System.Drawing.Point(12, 192);
             this.label2.Name = "label2";
             this.label2.Size = new System.Drawing.Size(23, 13);
             this.label2.TabIndex = 9;
@@ -594,7 +697,8 @@
             // label1
             // 
             this.label1.AutoSize = true;
-            this.label1.Location = new System.Drawing.Point(15, 71);
+            this.label1.Font = new System.Drawing.Font("Microsoft Sans Serif", 8.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
+            this.label1.Location = new System.Drawing.Point(12, 160);
             this.label1.Name = "label1";
             this.label1.Size = new System.Drawing.Size(31, 13);
             this.label1.TabIndex = 5;
@@ -603,7 +707,7 @@
             // memlimit
             // 
             this.memlimit.AutoSize = true;
-            this.memlimit.Location = new System.Drawing.Point(63, 70);
+            this.memlimit.Location = new System.Drawing.Point(60, 159);
             this.memlimit.Name = "memlimit";
             this.memlimit.Size = new System.Drawing.Size(83, 17);
             this.memlimit.TabIndex = 6;
@@ -612,31 +716,10 @@
             this.memlimit.UseVisualStyleBackColor = true;
             this.memlimit.CheckedChanged += new System.EventHandler(this.memlimit_CheckedChanged);
             // 
-            // threadlimit
-            // 
-            this.threadlimit.AutoSize = true;
-            this.threadlimit.Location = new System.Drawing.Point(63, 14);
-            this.threadlimit.Name = "threadlimit";
-            this.threadlimit.Size = new System.Drawing.Size(80, 17);
-            this.threadlimit.TabIndex = 1;
-            this.threadlimit.Text = "Thread limit";
-            this.toolTips.SetToolTip(this.threadlimit, "enable thread limit");
-            this.threadlimit.UseVisualStyleBackColor = true;
-            this.threadlimit.CheckedChanged += new System.EventHandler(this.threadlimit_CheckedChanged);
-            // 
-            // lbl_CPURAM
-            // 
-            this.lbl_CPURAM.AutoSize = true;
-            this.lbl_CPURAM.Location = new System.Drawing.Point(15, 15);
-            this.lbl_CPURAM.Name = "lbl_CPURAM";
-            this.lbl_CPURAM.Size = new System.Drawing.Size(29, 13);
-            this.lbl_CPURAM.TabIndex = 0;
-            this.lbl_CPURAM.Text = "CPU";
-            // 
             // lbl_RAM2
             // 
             this.lbl_RAM2.AutoSize = true;
-            this.lbl_RAM2.Location = new System.Drawing.Point(222, 71);
+            this.lbl_RAM2.Location = new System.Drawing.Point(219, 160);
             this.lbl_RAM2.Name = "lbl_RAM2";
             this.lbl_RAM2.Size = new System.Drawing.Size(25, 13);
             this.lbl_RAM2.TabIndex = 8;
@@ -645,7 +728,7 @@
             // mem
             // 
             this.mem.Enabled = false;
-            this.mem.Location = new System.Drawing.Point(152, 69);
+            this.mem.Location = new System.Drawing.Point(149, 158);
             this.mem.Maximum = new decimal(new int[] {
             1024000,
             0,
@@ -663,22 +746,6 @@
             0});
             this.mem.ValueChanged += new System.EventHandler(this.ram_ValueChanged);
             // 
-            // threads
-            // 
-            this.threads.Enabled = false;
-            this.threads.Location = new System.Drawing.Point(152, 13);
-            this.threads.Name = "threads";
-            this.threads.Size = new System.Drawing.Size(64, 20);
-            this.threads.TabIndex = 2;
-            this.threads.TextAlign = System.Windows.Forms.HorizontalAlignment.Right;
-            this.toolTips.SetToolTip(this.threads, "set thread limit");
-            this.threads.Value = new decimal(new int[] {
-            4,
-            0,
-            0,
-            0});
-            this.threads.ValueChanged += new System.EventHandler(this.threads_ValueChanged);
-            // 
             // EngraverForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
@@ -693,7 +760,7 @@
             this.MinimumSize = new System.Drawing.Size(640, 510);
             this.Name = "EngraverForm";
             this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
-            this.Text = "Engraver GUI v.2.0.4";
+            this.Text = "Engraver GUI v.2.2.0";
             this.FormClosing += new System.Windows.Forms.FormClosingEventHandler(this.EngraverForm_FormClosing);
             this.Load += new System.EventHandler(this.EngraverForm_Load);
             this.statusStrip.ResumeLayout(false);
@@ -707,8 +774,8 @@
             ((System.ComponentModel.ISupportInitialize)(this.nonces)).EndInit();
             this.tabPage2.ResumeLayout(false);
             this.tabPage2.PerformLayout();
+            ((System.ComponentModel.ISupportInitialize)(this.devices)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.mem)).EndInit();
-            ((System.ComponentModel.ISupportInitialize)(this.threads)).EndInit();
             this.ResumeLayout(false);
             this.PerformLayout();
 
@@ -756,14 +823,10 @@
         private System.Windows.Forms.Label label2;
         private System.Windows.Forms.Label label1;
         private System.Windows.Forms.CheckBox memlimit;
-        private System.Windows.Forms.CheckBox threadlimit;
-        private System.Windows.Forms.Label lbl_CPURAM;
         private System.Windows.Forms.Label lbl_RAM2;
         private System.Windows.Forms.NumericUpDown mem;
-        private System.Windows.Forms.NumericUpDown threads;
         private System.Windows.Forms.Label label3;
         private System.Windows.Forms.TextBox plotStatus2;
-        private System.Windows.Forms.Label label4;
         private System.Windows.Forms.ComboBox units;
         private System.Windows.Forms.ToolTip toolTips;
         private System.Windows.Forms.Label plotsize;
@@ -772,6 +835,15 @@
         private System.Windows.Forms.ToolStripStatusLabel toolStripStatusLabel2;
         private System.Windows.Forms.ToolStripProgressBar pbar2;
         private System.Windows.Forms.ToolStripStatusLabel StatusLabel4;
+        private System.Windows.Forms.Label label7;
+        private System.Windows.Forms.Label label6;
+        private System.Windows.Forms.CheckBox benchmark;
+        private System.Windows.Forms.CheckBox zcb;
+        private System.Windows.Forms.DataGridView devices;
+        private System.Windows.Forms.DataGridViewCheckBoxColumn Column1;
+        private System.Windows.Forms.DataGridViewTextBoxColumn Column2;
+        private System.Windows.Forms.DataGridViewTextBoxColumn Column3;
+        private System.Windows.Forms.DataGridViewTextBoxColumn Column4;
     }
 }
 

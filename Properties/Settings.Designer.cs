@@ -37,18 +37,6 @@ namespace EngraverGui.Properties {
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("12")]
-        public int threads {
-            get {
-                return ((int)(this["threads"]));
-            }
-            set {
-                this["threads"] = value;
-            }
-        }
-        
-        [global::System.Configuration.UserScopedSettingAttribute()]
-        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("4096")]
         public int mem {
             get {
@@ -80,18 +68,6 @@ namespace EngraverGui.Properties {
             }
             set {
                 this["maxnonces"] = value;
-            }
-        }
-        
-        [global::System.Configuration.UserScopedSettingAttribute()]
-        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("False")]
-        public bool threadlimit {
-            get {
-                return ((bool)(this["threadlimit"]));
-            }
-            set {
-                this["threadlimit"] = value;
             }
         }
         
@@ -164,6 +140,150 @@ namespace EngraverGui.Properties {
             }
             set {
                 this["unit"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool cpu {
+            get {
+                return ((bool)(this["cpu"]));
+            }
+            set {
+                this["cpu"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("0")]
+        public int cpulimit {
+            get {
+                return ((int)(this["cpulimit"]));
+            }
+            set {
+                this["cpulimit"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool gpu1 {
+            get {
+                return ((bool)(this["gpu1"]));
+            }
+            set {
+                this["gpu1"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool gpu2 {
+            get {
+                return ((bool)(this["gpu2"]));
+            }
+            set {
+                this["gpu2"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool gpu3 {
+            get {
+                return ((bool)(this["gpu3"]));
+            }
+            set {
+                this["gpu3"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool gpu4 {
+            get {
+                return ((bool)(this["gpu4"]));
+            }
+            set {
+                this["gpu4"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("0")]
+        public int gpu1limit {
+            get {
+                return ((int)(this["gpu1limit"]));
+            }
+            set {
+                this["gpu1limit"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("0")]
+        public int gpu2limit {
+            get {
+                return ((int)(this["gpu2limit"]));
+            }
+            set {
+                this["gpu2limit"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("0")]
+        public int gpu3limit {
+            get {
+                return ((int)(this["gpu3limit"]));
+            }
+            set {
+                this["gpu3limit"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("0")]
+        public int gpu4limit {
+            get {
+                return ((int)(this["gpu4limit"]));
+            }
+            set {
+                this["gpu4limit"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool bench {
+            get {
+                return ((bool)(this["bench"]));
+            }
+            set {
+                this["bench"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool zcb {
+            get {
+                return ((bool)(this["zcb"]));
+            }
+            set {
+                this["zcb"] = value;
             }
         }
     }

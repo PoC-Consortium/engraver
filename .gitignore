@@ -9,3 +9,5 @@
 /obj/Release
 /Thumbs.db
 /.vs
+/packages/OpenCL.Net.2.2.9.0
+/target
