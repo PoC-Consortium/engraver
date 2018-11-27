@@ -17,6 +17,7 @@ namespace EngraverGui
         int LoGSEC = 4096;
         decimal nonces_to_plot;
         String features = "";
+        bool opencl = true;
 
         [DllImport("kernel32", SetLastError = true, CharSet = CharSet.Auto)]
         public static extern int GetDiskFreeSpace(string lpRootPathName, out int lpSectorsPerCluster, out int lpBytesPerSector, out int lpNumberOfFreeClusters, out int lpTotalNumberOfClusters);
@@ -225,19 +226,6 @@ namespace EngraverGui
             }
         }
 
-        // update nonces to plot label
-        private void UpdateNoncesToPlot()
-        {
-            if (ntpmax.Checked && Directory.Exists(outputFolder.Text))
-            {
-                DriveInfo drive = new DriveInfo(outputFolder.Text);
-                DriveInfo a = new DriveInfo(drive.Name);
-                nonces.Value = (decimal)((double)(a.AvailableFreeSpace / (2 << 17)) * 0.99999);
-                Properties.Settings.Default.nonces = nonces.Value;
-                Properties.Settings.Default.Save();
-            }
-        }
-
         // pretty print bytes
         private string PrettyBytes(ulong bytes)
         {
@@ -253,17 +241,17 @@ namespace EngraverGui
         // load form and user settings
         private void EngraverForm_Load(object sender, EventArgs e)
         {
+            LoadSettings();
+            UpdateDriveInfo();
+            UpdateNoncesToPlot();
+            get_devices();
+
             //check for exe
-            if (File.Exists(System.Environment.CurrentDirectory + "\\engraver.exe"))
+            String exe = "engraver_cpu.exe";
+            if (opencl) exe = "engraver_gpu.exe";
+            if (!File.Exists(System.Environment.CurrentDirectory + "\\" + exe))
             {
-                LoadSettings();
-                UpdateDriveInfo();
-                UpdateNoncesToPlot();
-                get_devices();
-            }
-            else
-            {
-                MessageBox.Show("Can't find engraver.exe. Shutting down...", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show("Can't find "+exe+". Shutting down...", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 Application.Exit();
             }
         }
@@ -341,14 +329,12 @@ namespace EngraverGui
                     }
                 }
 
-
                 // start control thread
                 new Thread(() =>
                 {
                     Thread.CurrentThread.IsBackground = true;
                     Control();
                 }).Start();
-
             }
             else
             {
@@ -386,8 +372,10 @@ namespace EngraverGui
             {
                 using (p1 = new Process())
                 {
+                    String exe = "engraver_cpu.exe";
+                    if (opencl) exe = "engraver_gpu.exe";
                     // set start info
-                    p1.StartInfo = new ProcessStartInfo("engraver.exe", "-i " + numericID.Text + " -s " + startnonce.Value.ToString() + " -n " + nonces_to_plot.ToString() + " -p " + outputFolder.Text + features )
+                    p1.StartInfo = new ProcessStartInfo(exe, "-i " + numericID.Text + " -s " + startnonce.Value.ToString() + " -n " + nonces_to_plot.ToString() + " -p " + outputFolder.Text + features )
                     {
                         WindowStyle = ProcessWindowStyle.Hidden,
                         //Arguments = "/A",
@@ -488,6 +476,24 @@ namespace EngraverGui
                 }
             }
             DisplayPlotSize();
+        }
+
+
+        // update nonces to plot label
+        private void UpdateNoncesToPlot()
+        {
+            if (ntpmax.Checked && Directory.Exists(outputFolder.Text))
+            {
+                DriveInfo drive = new DriveInfo(outputFolder.Text);
+                DriveInfo a = new DriveInfo(drive.Name);
+                int nonces_per_sector = Math.Max(1, LoGSEC / 64);
+                units.SelectedIndex = 0;
+                ulong rounded = (ulong)(a.AvailableFreeSpace * 0.99999 / (2 << 17)) / (ulong)nonces_per_sector * (ulong)nonces_per_sector;
+                nonces.Value = (decimal)rounded;
+                Properties.Settings.Default.nonces = nonces.Value;
+                Properties.Settings.Default.unit = units.SelectedIndex;
+                Properties.Settings.Default.Save();
+            }
         }
 
         private void ntp_Enter(object sender, EventArgs e)
@@ -719,6 +725,8 @@ namespace EngraverGui
             }
 
             // get GPUs
+
+            try{ 
             ErrorCode error;
             Platform[] platforms = Cl.GetPlatformIDs(out error);
             for (int i = 0;i < platforms.Length;i++) {
@@ -749,6 +757,12 @@ namespace EngraverGui
                     }
                     devices.Rows.Add(active, "GPU[" + i.ToString() + ":" + j.ToString() + "]: " + Cl.GetDeviceInfo(gpus[j], DeviceInfo.Name, out error), Cl.GetDeviceInfo(gpus[j], DeviceInfo.MaxComputeUnits, out error).CastTo<uint>(), threads);
                 }
+            }
+            } catch (Exception)
+            {
+                opencl = false;
+                zcb.Checked = false;
+                zcb.Enabled = false;
             }
         }
 
