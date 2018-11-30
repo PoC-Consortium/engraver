@@ -205,7 +205,7 @@ namespace EngraverGui
                     plotname.Text = numericID.Text + "_" + startnonce.Value.ToString() + "_" + (nonces.Value * 4 * 1024 * 1024).ToString();
                     plotsize.Text = "(" + string.Format("{0:n0}", (ulong)nonces.Value * 4 * 1024 * 1024) + " nonces)";
                     break;
-            }              
+            }
         }
 
         // update target drive info label
@@ -251,7 +251,7 @@ namespace EngraverGui
             if (opencl) exe = "engraver_gpu.exe";
             if (!File.Exists(System.Environment.CurrentDirectory + "\\" + exe))
             {
-                MessageBox.Show("Can't find "+exe+". Shutting down...", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show("Can't find " + exe + ". Shutting down...", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 Application.Exit();
             }
         }
@@ -319,13 +319,13 @@ namespace EngraverGui
                 // read cpu + gpu
                 if ((bool)devices.Rows[0].Cells[0].Value)
                 {
-                     features += " -c "+ devices.Rows[0].Cells[3].Value.ToString();
+                    features += " -c " + devices.Rows[0].Cells[3].Value.ToString();
                 }
                 for (int i = 1; i < devices.Rows.Count; i++)
                 {
                     if ((bool)devices.Rows[i].Cells[0].Value)
                     {
-                        features += " -g " + devices.Rows[i].Cells[1].Value.ToString().Substring(4,3) +":"+ devices.Rows[i].Cells[3].Value.ToString();
+                        features += " -g " + devices.Rows[i].Cells[1].Value.ToString().Substring(4, 3) + ":" + devices.Rows[i].Cells[3].Value.ToString();
                     }
                 }
 
@@ -343,7 +343,8 @@ namespace EngraverGui
                     try
                     {
                         p1.Kill();
-                    } catch
+                    }
+                    catch
                     {
 
                     }
@@ -375,7 +376,7 @@ namespace EngraverGui
                     String exe = "engraver_cpu.exe";
                     if (opencl) exe = "engraver_gpu.exe";
                     // set start info
-                    p1.StartInfo = new ProcessStartInfo(exe, "-i " + numericID.Text + " -s " + startnonce.Value.ToString() + " -n " + nonces_to_plot.ToString() + " -p " + outputFolder.Text + features )
+                    p1.StartInfo = new ProcessStartInfo(exe, "-i " + numericID.Text + " -s " + startnonce.Value.ToString() + " -n " + nonces_to_plot.ToString() + " -p " + outputFolder.Text + features)
                     {
                         WindowStyle = ProcessWindowStyle.Hidden,
                         //Arguments = "/A",
@@ -576,7 +577,8 @@ namespace EngraverGui
                     try
                     {
                         p1.Kill();
-                    } catch
+                    }
+                    catch
                     {
 
                     }
@@ -726,39 +728,49 @@ namespace EngraverGui
 
             // get GPUs
 
-            try{ 
-            ErrorCode error;
-            Platform[] platforms = Cl.GetPlatformIDs(out error);
-            for (int i = 0;i < platforms.Length;i++) {
-                Device[] gpus = Cl.GetDeviceIDs(platforms[i], DeviceType.All, out error);
-                for(int j = 0; j < Math.Min(4,gpus.Length);j ++)
+            try
+            {
+                ErrorCode error;
+                Platform[] platforms = Cl.GetPlatformIDs(out error);
+                for (int i = 0; i < platforms.Length; i++)
                 {
-                    bool active = false;
-                    int threads = 0;
-                    if (j == 0)
+                    String version = Cl.GetPlatformInfo(platforms[i], PlatformInfo.Version, out error).ToString();
+                    // only support OpenCL 1.x
+                    if (!version.ToUpper().StartsWith("OPENCL 1")) continue;
+
+                    Device[] gpus = Cl.GetDeviceIDs(platforms[i], DeviceType.All, out error);
+                    for (int j = 0; j < Math.Min(4, gpus.Length); j++)
                     {
-                        active = Properties.Settings.Default.gpu1;
-                        threads = Properties.Settings.Default.gpu1limit;
+                        // only support GPUs
+                        uint devicetype = Cl.GetDeviceInfo(gpus[j], DeviceInfo.Type, out error).CastTo<uint>();
+                        if (devicetype != 4) continue;
+                        bool active = false;
+                        int threads = 0;
+                        if (j == 0)
+                        {
+                            active = Properties.Settings.Default.gpu1;
+                            threads = Properties.Settings.Default.gpu1limit;
+                        }
+                        if (j == 1)
+                        {
+                            active = Properties.Settings.Default.gpu2;
+                            threads = Properties.Settings.Default.gpu2limit;
+                        }
+                        if (j == 2)
+                        {
+                            active = Properties.Settings.Default.gpu3;
+                            threads = Properties.Settings.Default.gpu3limit;
+                        }
+                        if (j == 3)
+                        {
+                            active = Properties.Settings.Default.gpu4;
+                            threads = Properties.Settings.Default.gpu4limit;
+                        }
+                        devices.Rows.Add(active, "GPU[" + i.ToString() + ":" + j.ToString() + "]: " + Cl.GetDeviceInfo(gpus[j], DeviceInfo.Name, out error), Cl.GetDeviceInfo(gpus[j], DeviceInfo.MaxComputeUnits, out error).CastTo<uint>(), threads);
                     }
-                    if (j == 1)
-                    {
-                        active = Properties.Settings.Default.gpu2;
-                        threads = Properties.Settings.Default.gpu2limit;
-                    }
-                    if (j == 2)
-                    {
-                        active = Properties.Settings.Default.gpu3;
-                        threads = Properties.Settings.Default.gpu3limit;
-                    }
-                    if (j == 3)
-                    {
-                        active = Properties.Settings.Default.gpu4;
-                        threads = Properties.Settings.Default.gpu4limit;
-                    }
-                    devices.Rows.Add(active, "GPU[" + i.ToString() + ":" + j.ToString() + "]: " + Cl.GetDeviceInfo(gpus[j], DeviceInfo.Name, out error), Cl.GetDeviceInfo(gpus[j], DeviceInfo.MaxComputeUnits, out error).CastTo<uint>(), threads);
                 }
             }
-            } catch (Exception)
+            catch (Exception)
             {
                 opencl = false;
                 zcb.Checked = false;
@@ -777,7 +789,7 @@ namespace EngraverGui
                     e.Cancel = true;
                 }
                 else
-                {                    
+                {
                     if (i > (uint)devices.Rows[e.RowIndex].Cells[e.ColumnIndex - 1].Value)
                     {
                         MessageBox.Show("Please enter a value between 0 and " + devices.Rows[e.RowIndex].Cells[e.ColumnIndex - 1].Value.ToString(), "Invalid Input", MessageBoxButtons.OK, MessageBoxIcon.Error);
@@ -807,23 +819,28 @@ namespace EngraverGui
         private void save_devices()
         {
             int num = devices.Rows.Count;
-            if (num >= 5) {
+            if (num >= 5)
+            {
                 Properties.Settings.Default.gpu4 = (bool)devices.Rows[4].Cells[0].Value;
                 Properties.Settings.Default.gpu4limit = Int32.Parse(devices.Rows[4].Cells[3].Value.ToString());
             }
-            if (num >= 4) {
+            if (num >= 4)
+            {
                 Properties.Settings.Default.gpu3 = (bool)devices.Rows[3].Cells[0].Value;
                 Properties.Settings.Default.gpu3limit = Int32.Parse(devices.Rows[3].Cells[3].Value.ToString());
             }
-            if (num >= 3) {
+            if (num >= 3)
+            {
                 Properties.Settings.Default.gpu2 = (bool)devices.Rows[2].Cells[0].Value;
                 Properties.Settings.Default.gpu2limit = Int32.Parse(devices.Rows[2].Cells[3].Value.ToString());
             }
-            if (num >= 2) {
+            if (num >= 2)
+            {
                 Properties.Settings.Default.gpu1 = (bool)devices.Rows[1].Cells[0].Value;
                 Properties.Settings.Default.gpu1limit = Int32.Parse(devices.Rows[1].Cells[3].Value.ToString());
             }
-            if (num >= 1) {
+            if (num >= 1)
+            {
                 Properties.Settings.Default.cpu = (bool)devices.Rows[0].Cells[0].Value;
                 Properties.Settings.Default.cpulimit = Int32.Parse(devices.Rows[0].Cells[3].Value.ToString());
             }
