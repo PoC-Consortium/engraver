@@ -736,7 +736,7 @@ namespace EngraverGui
                 {
                     String version = Cl.GetPlatformInfo(platforms[i], PlatformInfo.Version, out error).ToString();
                     // only support OpenCL 1.x
-                    if (!version.ToUpper().StartsWith("OPENCL 1")) continue;
+                    // if (!version.ToUpper().StartsWith("OPENCL 1")) continue;
 
                     Device[] gpus = Cl.GetDeviceIDs(platforms[i], DeviceType.All, out error);
                     for (int j = 0; j < Math.Min(4, gpus.Length); j++)
