@@ -18,6 +18,7 @@ namespace EngraverGui
         decimal nonces_to_plot;
         String features = "";
         bool opencl = true;
+        bool init = false;
 
         [DllImport("kernel32", SetLastError = true, CharSet = CharSet.Auto)]
         public static extern int GetDiskFreeSpace(string lpRootPathName, out int lpSectorsPerCluster, out int lpBytesPerSector, out int lpNumberOfFreeClusters, out int lpTotalNumberOfClusters);
@@ -732,13 +733,14 @@ namespace EngraverGui
             {
                 ErrorCode error;
                 Platform[] platforms = Cl.GetPlatformIDs(out error);
+                int k = 0;
                 for (int i = 0; i < platforms.Length; i++)
                 {
                     String version = Cl.GetPlatformInfo(platforms[i], PlatformInfo.Version, out error).ToString();
                     // only support OpenCL 1.x
                     // if (!version.ToUpper().StartsWith("OPENCL 1")) continue;
 
-                    Device[] gpus = Cl.GetDeviceIDs(platforms[i], DeviceType.All, out error);
+                    Device[] gpus = Cl.GetDeviceIDs(platforms[i], DeviceType.All, out error);                  
                     for (int j = 0; j < Math.Min(4, gpus.Length); j++)
                     {
                         // only support GPUs
@@ -746,27 +748,28 @@ namespace EngraverGui
                         if (devicetype != 4) continue;
                         bool active = false;
                         int threads = 0;
-                        if (j == 0)
+                        if (k == 0)
                         {
                             active = Properties.Settings.Default.gpu1;
                             threads = Properties.Settings.Default.gpu1limit;
                         }
-                        if (j == 1)
+                        if (k == 1)
                         {
                             active = Properties.Settings.Default.gpu2;
                             threads = Properties.Settings.Default.gpu2limit;
                         }
-                        if (j == 2)
+                        if (k == 2)
                         {
                             active = Properties.Settings.Default.gpu3;
                             threads = Properties.Settings.Default.gpu3limit;
                         }
-                        if (j == 3)
+                        if (k == 3)
                         {
                             active = Properties.Settings.Default.gpu4;
                             threads = Properties.Settings.Default.gpu4limit;
                         }
                         devices.Rows.Add(active, "GPU[" + i.ToString() + ":" + j.ToString() + "]: " + Cl.GetDeviceInfo(gpus[j], DeviceInfo.Name, out error), Cl.GetDeviceInfo(gpus[j], DeviceInfo.MaxComputeUnits, out error).CastTo<uint>(), threads);
+                        k++;
                     }
                 }
             }
@@ -776,6 +779,7 @@ namespace EngraverGui
                 zcb.Checked = false;
                 zcb.Enabled = false;
             }
+            init = true;
         }
 
         private void devices_CellValidating(object sender, DataGridViewCellValidatingEventArgs e)
@@ -818,6 +822,7 @@ namespace EngraverGui
 
         private void save_devices()
         {
+            if (!init) return;
             int num = devices.Rows.Count;
             if (num >= 5)
             {
