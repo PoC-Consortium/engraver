@@ -12,7 +12,7 @@ const TASK_SIZE: u64 = 16384;
 const SCOOP_SIZE: u64 = 64;
 const NONCE_SIZE: u64 = 4096 * SCOOP_SIZE;
 
-pub fn create_writer_task(
+pub fn create_writer_thread(
     task: Arc<PlotterTask>,
     mut nonces_written: u64,
     mut pb: Option<pbr::ProgressBar<pbr::Pipe>>,
@@ -30,49 +30,50 @@ pub fn create_writer_task(
                 "{}_{}_{}",
                 task.numeric_id, task.start_nonce, task.nonces
             ));
+            if !task.benchmark {
+                let file = if task.direct_io {
+                    open_using_direct_io(&filename)
+                } else {
+                    open(&filename)
+                };
 
-            let file = if task.direct_io {
-                open_using_direct_io(&filename)
-            } else {
-                open(&filename)
-            };
+                let mut file = file.unwrap();
 
-            let mut file = file.unwrap();
+                for scoop in 0..4096 {
+                    let mut seek_addr = scoop * task.nonces as u64 * SCOOP_SIZE;
+                    seek_addr += nonces_written as u64 * SCOOP_SIZE;
 
-            for scoop in 0..4096 {
-                let mut seek_addr = scoop * task.nonces as u64 * SCOOP_SIZE;
-                seek_addr += nonces_written as u64 * SCOOP_SIZE;
+                    file.seek(SeekFrom::Start(seek_addr)).unwrap();
 
-                file.seek(SeekFrom::Start(seek_addr)).unwrap();
+                    let mut local_addr = scoop * buffer_size / NONCE_SIZE * SCOOP_SIZE;
+                    for _ in 0..nonces_to_write / TASK_SIZE {
+                        file.write_all(
+                            &bs[local_addr as usize
+                                    ..(local_addr + TASK_SIZE * SCOOP_SIZE) as usize],
+                        ).unwrap();
 
-                let mut local_addr = scoop * buffer_size / NONCE_SIZE * SCOOP_SIZE;
-                for _ in 0..nonces_to_write / TASK_SIZE {
-                    file.write_all(
-                        &bs[local_addr as usize..(local_addr + TASK_SIZE * SCOOP_SIZE) as usize],
-                    ).unwrap();
+                        local_addr += TASK_SIZE * SCOOP_SIZE;
+                    }
 
-                    local_addr += TASK_SIZE * SCOOP_SIZE;
-                }
+                    // write remainder
+                    if nonces_to_write % TASK_SIZE > 0 {
+                        file.write_all(
+                            &bs[local_addr as usize
+                                    ..(local_addr + (nonces_to_write % TASK_SIZE) * SCOOP_SIZE)
+                                        as usize],
+                        ).unwrap();
+                    }
 
-                // write remainder
-                if nonces_to_write % TASK_SIZE > 0 {
-                    file.write_all(
-                        &bs[local_addr as usize
-                                ..(local_addr + (nonces_to_write % TASK_SIZE) * SCOOP_SIZE)
-                                    as usize],
-                    ).unwrap();
-                }
-
-                if (scoop + 1) % 128 == 0 {
-                    match &mut pb {
-                        Some(pb) => {
-                            pb.add(nonces_to_write * SCOOP_SIZE * 128);
+                    if (scoop + 1) % 128 == 0 {
+                        match &mut pb {
+                            Some(pb) => {
+                                pb.add(nonces_to_write * SCOOP_SIZE * 128);
+                            }
+                            None => (),
                         }
-                        None => (),
                     }
                 }
             }
-
             nonces_written += nonces_to_write;
 
             // thread end
@@ -86,13 +87,15 @@ pub fn create_writer_task(
                 break;
             }
 
-            write_resume_info(&filename, nonces_written);
+            if !task.benchmark {
+                write_resume_info(&filename, nonces_written);
+            }
             tx_empty_buffers.send(buffer);
         }
     }
 }
 
-pub fn read_resume_info(file: &Path) -> Result<u64,u64> {
+pub fn read_resume_info(file: &Path) -> Result<u64, u64> {
     let mut file = open_r(&file).unwrap();
     file.seek(SeekFrom::End(-8)).unwrap();
 

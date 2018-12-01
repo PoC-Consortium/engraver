@@ -9,8 +9,13 @@ extern crate pbr;
 extern crate stopwatch;
 extern crate sys_info;
 
-mod hasher;
+mod cpu_hasher;
+#[cfg(feature = "opencl")]
+mod gpu_hasher;
+#[cfg(feature = "opencl")]
+mod ocl;
 mod plotter;
+mod scheduler;
 mod utils;
 mod writer;
 
@@ -19,13 +24,10 @@ use clap::AppSettings::{ArgRequiredElseHelp, DeriveDisplayOrder, VersionlessSubc
 use clap::ArgGroup;
 use clap::{App, Arg};
 use plotter::{Plotter, PlotterTask};
+use std::cmp::min;
 use utils::set_low_prio;
 
 fn main() {
-    #[cfg(not(feature = "opencl"))]
-    let _opencl = false;
-    #[cfg(feature = "opencl")]
-    let opencl = true;
     let arg = App::new("Engraver")
         .version(crate_version!())
         .author(crate_authors!())
@@ -60,6 +62,12 @@ fn main() {
                 .long("quiet")
                 .help("Runs engraver in non-verbose mode")
                 .global(true),
+        ).arg(
+            Arg::with_name("benchmark")
+                .short("b")
+                .long("bench")
+                .help("Runs engraver in xPU benchmark mode")
+                .global(true),
         )
         /*
         .subcommand(
@@ -74,7 +82,7 @@ fn main() {
                         .value_name("numeric_ID")
                         .help("your numeric Burst ID")
                         .takes_value(true)
-                        .required(true),
+                        .required_unless("ocl-devices"),
                 ).arg(
                     Arg::with_name("start nonce")
                         .short("s")
@@ -82,7 +90,7 @@ fn main() {
                         .value_name("start_nonce")
                         .help("where you want to start plotting")
                         .takes_value(true)
-                        .required(true),
+                        .required_unless("ocl-devices"),
                 ).arg(
                     Arg::with_name("nonces")
                         .short("n")
@@ -90,7 +98,7 @@ fn main() {
                         .value_name("nonces")
                         .help("how many nonces you want to plot")
                         .takes_value(true)
-                        .required(true),
+                        .required_unless("ocl-devices"),
                 ).arg(
                     Arg::with_name("path")
                         .short("p")
@@ -120,14 +128,13 @@ fn main() {
                         .short("g")
                         .long("gpu")
                         .value_name("platform_id:device_id")
-                        .help("*GPU(s) you want to use for plotting")
+                        .help("GPU(s) you want to use for plotting (optional)")
                         .multiple(true)
                         .takes_value(true),
                 ]).groups(&[#[cfg(feature = "opencl")]
                 ArgGroup::with_name("processing")
                     .args(&["cpu", "gpu"])
-                    .multiple(true)
-                    .required(true)])
+                    .multiple(true)])
                     /*
                     .arg(
                     Arg::with_name("ssd buffer")
@@ -168,14 +175,35 @@ fn main() {
                 
         )*/;
 
+    #[cfg(feature = "opencl")]
+    let arg = arg
+        .arg(
+            Arg::with_name("ocl-devices")
+                .short("o")
+                .long("opencl")
+                .help("Display OpenCL platforms and devices")
+                .global(true),
+        ).arg(
+            Arg::with_name("zero-copy")
+                .short("z")
+                .long("zcb")
+                .help("Enables zero copy buffers for shared mem (integrated) gpus")
+                .global(true),
+        );
     let matches = &arg.get_matches();
 
     if matches.is_present("low priority") {
         set_low_prio();
     }
 
+    if matches.is_present("ocl-devices") {
+        #[cfg(feature = "opencl")]
+        ocl::platform_info();
+        return;
+    }
+
     // plotting
-    /*
+    /* subcommand
     if let Some(matches) = matches.subcommand_matches("plot") {
     */
     let numeric_id = value_t!(matches, "numeric id", u64).unwrap_or_else(|e| e.exit());
@@ -189,8 +217,30 @@ fn main() {
             .unwrap()
     });
     let mem = value_t!(matches, "memory", String).unwrap_or_else(|_| "0B".to_owned());
-    let cpu_threads =
-        value_t!(matches, "cpu", u8).unwrap_or_else(|_| sys_info::cpu_num().unwrap() as u8);
+    let cpu_threads = value_t!(matches, "cpu", u8).unwrap_or(0u8);
+
+    let gpus = if matches.occurrences_of("gpu") > 0 {
+        let gpu = values_t!(matches, "gpu", String);
+        Some(gpu.unwrap())
+    } else {
+        None
+    };
+
+    // work out number of cpu threads to use
+    let cores = sys_info::cpu_num().unwrap() as u8;
+    let cpu_threads = if cpu_threads == 0 {
+        cores
+    } else {
+        min(cores, cpu_threads)
+    };
+
+    // special case: dont use cpu if only a gpu is defined
+    #[cfg(feature = "opencl")]
+    let cpu_threads = if matches.occurrences_of("gpu") > 0 && matches.occurrences_of("cpu") == 0 {
+        0u8
+    } else {
+        cpu_threads
+    };
 
     let p = Plotter::new();
     p.run(PlotterTask {
@@ -200,8 +250,11 @@ fn main() {
         output_path,
         mem,
         cpu_threads,
+        gpus,
         direct_io: !matches.is_present("disable direct i/o"),
         async_io: !matches.is_present("disable async i/o"),
         quiet: matches.is_present("non-verbosity"),
+        benchmark: matches.is_present("benchmark"),
+        zcb: matches.is_present("zero-copy"),
     });
 }

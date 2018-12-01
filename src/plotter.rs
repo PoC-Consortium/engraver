@@ -9,9 +9,12 @@ use self::pbr::{MultiBar, Units};
 use self::raw_cpuid::CpuId;
 use chan;
 use core_affinity;
-use hasher::create_hasher_task;
+#[cfg(feature = "opencl")]
+use ocl::gpu_get_info;
+use scheduler::create_scheduler_thread;
 use std::cmp::{max, min};
 use std::path::Path;
+use std::process;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use stopwatch::Stopwatch;
@@ -20,7 +23,7 @@ use utils::get_sector_size;
 use utils::preallocate;
 #[cfg(windows)]
 use utils::set_thread_ideal_processor;
-use writer::{create_writer_task, read_resume_info, write_resume_info};
+use writer::{create_writer_thread, read_resume_info, write_resume_info};
 
 const NONCE_SIZE: u64 = (2 << 17);
 const SCOOP_SIZE: u64 = 64;
@@ -42,9 +45,12 @@ pub struct PlotterTask {
     pub output_path: String,
     pub mem: String,
     pub cpu_threads: u8,
+    pub gpus: Option<Vec<String>>,
     pub direct_io: bool,
     pub async_io: bool,
     pub quiet: bool,
+    pub benchmark: bool,
+    pub zcb: bool,
 }
 
 pub struct Buffer {
@@ -81,6 +87,11 @@ impl Plotter {
         if !task.quiet {
             println!("Engraver {} - PoC2 Plotter\n", crate_version!());
         }
+
+        if !task.quiet && task.benchmark {
+            println!("*BENCHMARK MODE*\n");
+        }
+
         if !task.quiet {
             println!(
                 "CPU: {} [using {} of {} cores{}{}]",
@@ -92,11 +103,31 @@ impl Plotter {
             );
         }
 
+        #[cfg(not(feature = "opencl"))]
+        let gpu_mem_needed = 0u64;
+        #[cfg(feature = "opencl")]
+        let gpu_mem_needed = match &task.gpus {
+            Some(x) => gpu_get_info(&x, task.quiet),
+            None => 0,
+        };
+
+        #[cfg(feature = "opencl")]
+        let gpu_mem_needed = if task.zcb {
+            gpu_mem_needed
+        } else {
+            gpu_mem_needed / 2
+        };
+
         // use all avaiblable disk space if nonce parameter has been omitted
         let free_disk_space = free_disk_space(&task.output_path);
         if task.nonces == 0 {
             task.nonces = free_disk_space / NONCE_SIZE;
         }
+
+        let gpu = match &task.gpus {
+            Some(_) => true,
+            None => false,
+        };
 
         // align number of nonces with sector size if direct i/o
         let mut rounded_nonces_to_sector_size = false;
@@ -128,9 +159,9 @@ impl Plotter {
         }
 
         // check available disk space
-        if free_disk_space < plotsize && !file.exists(){
+        if free_disk_space < plotsize && !file.exists() && !task.benchmark {
             println!(
-                "Error: insufficient disk space, MiB_required={}, MiB_available={}",
+                "Error: insufficient disk space, MiB_required={:.2}, MiB_available={:.2}",
                 plotsize as f64 / 1024.0 / 1024.0,
                 free_disk_space as f64 / 1024.0 / 1024.0
             );
@@ -139,17 +170,25 @@ impl Plotter {
         }
 
         // calculate memory usage
-        let mem = match calculate_mem_to_use(&task, &memory, nonces_per_sector){
+        let mem = match calculate_mem_to_use(&task, &memory, nonces_per_sector, gpu, gpu_mem_needed)
+        {
             Ok(x) => x,
-            Err(_) => return
+            Err(_) => return,
         };
 
         if !task.quiet {
             println!(
-                "RAM: Total={:.2} GiB, Free= {:.2} GiB, Usage= {:.2} GiB \n",
+                "RAM: Total={:.2} GiB, Free={:.2} GiB, Usage={:.2} GiB",
                 memory.total as f64 / 1024.0 / 1024.0,
                 memory.free as f64 / 1024.0 / 1024.0,
-                mem as f64 / 1024.0 / 1024.0 / 1024.0
+                (mem + gpu_mem_needed) as f64 / 1024.0 / 1024.0 / 1024.0
+            );
+
+            #[cfg(feature = "opencl")]
+            println!(
+                "     HDDcache={:.2} GiB, GPUcache={:.2} GiB,\n",
+                mem as f64 / 1024.0 / 1024.0 / 1024.0,
+                gpu_mem_needed as f64 / 1024.0 / 1024.0 / 1024.0
             );
 
             println!("Numeric ID:  {}", task.numeric_id);
@@ -181,7 +220,6 @@ impl Plotter {
                     println!("File is already completed.");
                     println!("Shutting Down...");
                     return;
-
                 }
             }
             if !task.quiet {
@@ -191,10 +229,10 @@ impl Plotter {
             if !task.quiet {
                 print!("Fast file pre-allocation...");
             }
-
-            preallocate(&file, plotsize, task.direct_io);
-            write_resume_info(&file, 0u64);
-
+            if !task.benchmark {
+                preallocate(&file, plotsize, task.direct_io);
+                write_resume_info(&file, 0u64);
+            }
             if !task.quiet {
                 println!("OK");
             }
@@ -205,7 +243,7 @@ impl Plotter {
                 println!("Starting plotting...\n");
             } else {
                 println!("Resuming plotting from nonce offset {}...\n", progress);
-            }        
+            }
         }
 
         // determine buffer size
@@ -261,14 +299,14 @@ impl Plotter {
 
         // hi bold! might make this optional in future releases.
         let thread_pinning = true;
-        let mut core_ids: Vec<core_affinity::CoreId> = Vec::new();
-
-        if thread_pinning {
-            core_ids = core_affinity::get_core_ids().unwrap();
-        }
+        let core_ids = if thread_pinning {
+            core_affinity::get_core_ids().unwrap()
+        } else {
+            Vec::new()
+        };
 
         let hasher = thread::spawn({
-            create_hasher_task(
+            create_scheduler_thread(
                 task.clone(),
                 rayon::ThreadPoolBuilder::new()
                     .num_threads(task.cpu_threads as usize)
@@ -292,7 +330,7 @@ impl Plotter {
         });
 
         let writer = thread::spawn({
-            create_writer_task(
+            create_writer_thread(
                 task.clone(),
                 progress,
                 p2x,
@@ -330,30 +368,49 @@ fn calculate_mem_to_use(
     task: &PlotterTask,
     memory: &sys_info::MemInfo,
     nonces_per_sector: u64,
+    gpu: bool,
+    gpu_mem_needed: u64,
 ) -> Result<u64, &'static str> {
     let plotsize = task.nonces * NONCE_SIZE;
 
     let mut mem = match task.mem.parse::<Bytes>() {
         Ok(x) => x.size() as u64,
-        Err(_) => { println!(
+        Err(_) => {
+            println!(
                 "Error: Can't parse memory limit parameter, input={}",
                 task.mem,
             );
             println!("\nPlease specify a number followed by a unit. If no unit is provided, bytes will be assumed.");
-            println!("Supported units: B, KiB, MiB, GiB, TiB, PiB, EiB, KB, MB, GB, TB, PB, EB");           
-            println!("Example: --mem 10GiB\n");           
+            println!("Supported units: B, KiB, MiB, GiB, TiB, PiB, EiB, KB, MB, GB, TB, PB, EB");
+            println!("Example: --mem 10GiB\n");
             println!("Shutting down...");
             return Err("invalid unit");
         }
     };
-    
+    if gpu && mem > 0 && mem < gpu_mem_needed + nonces_per_sector * NONCE_SIZE {
+        println!("Error: Insufficient host memory for GPU plotting!");
+        println!("Shutting down...");
+        process::exit(0);
+    }
+
+    if gpu && mem > 0 {
+        mem -= gpu_mem_needed;
+    }
+
     if mem == 0 {
         mem = plotsize;
     }
-    mem = min(mem, plotsize);
+    mem = min(mem, plotsize + gpu_mem_needed);
+
+    // opencl requires buffer to be a multiple of 16 (data coalescence magic)
+    let nonces_per_sector = if gpu {
+        max(16, nonces_per_sector)
+    } else {
+        nonces_per_sector
+    };
 
     // don't exceed free memory and leave some elbow room 1-1000/1024
-    mem = min(mem, memory.free * 1000);
+    mem = min(mem, memory.free * 1000 - gpu_mem_needed);
 
     // rounding single/double buffer
     let num_buffer = if task.async_io { 2 } else { 1 };
