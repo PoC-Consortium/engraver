@@ -6,10 +6,11 @@
 
 ### Features
 - windows, linux, unix & macOS
-- x86 64bit 
+- x86 32&64bit 
 - direct and async i/o
 - SIMD support: sse2, avx, avx2, avx512f
-- fastest cpu plotter there is
+- gpu support
+- fastest plotter there is
 
 ### Requirements
 - new version of rust [stable toolchain]
@@ -20,16 +21,13 @@ Binaries are in **target/debug** or **target/release** depending on optimization
 
 ``` shell
 # build debug und run directly
-cargo run
+cargo run [--features=opencl]
 
 # build debug (unoptimized)
-cargo build
+cargo build [--features=opencl]
 
 # build release (optimized)
-cargo build --release
-
-# test
-cargo test
+cargo build --release [--features=opencl]
 ```
 
 ### Run
