@@ -421,6 +421,7 @@
             this.startnonce.TextAlign = System.Windows.Forms.HorizontalAlignment.Right;
             this.startnonce.ThousandsSeparator = true;
             this.toolTips.SetToolTip(this.startnonce, "where you want to start plotting");
+            this.startnonce.ValueChanged += new System.EventHandler(this.startnonce_ValueChanged);
             // 
             // label12
             // 
@@ -760,7 +761,7 @@
             this.MinimumSize = new System.Drawing.Size(640, 510);
             this.Name = "EngraverForm";
             this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
-            this.Text = "Engraver GUI v.2.2.0";
+            this.Text = "Engraver GUI v.2.2.1";
             this.FormClosing += new System.Windows.Forms.FormClosingEventHandler(this.EngraverForm_FormClosing);
             this.Load += new System.EventHandler(this.EngraverForm_Load);
             this.statusStrip.ResumeLayout(false);

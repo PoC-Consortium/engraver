@@ -690,11 +690,7 @@ namespace EngraverGui
         private void EngraverForm_FormClosing(object sender, FormClosingEventArgs e)
         {
             // check if plotting is active
-            if (btn_start.Text == "Start Plotting")
-            {
-                Application.Exit();
-            }
-            else
+            if (btn_start.Text == "Stop Plotting")
             {
                 if (MessageBox.Show("Plotting in progress, are you sure you want to exit?", "Stop Plotting", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
                 {
@@ -706,7 +702,9 @@ namespace EngraverGui
                     {
 
                     }
-                    Application.Exit();
+                } else
+                {
+                    e.Cancel = true;
                 }
             }
         }
@@ -850,6 +848,11 @@ namespace EngraverGui
                 Properties.Settings.Default.cpulimit = Int32.Parse(devices.Rows[0].Cells[3].Value.ToString());
             }
             Properties.Settings.Default.Save();
+        }
+
+        private void startnonce_ValueChanged(object sender, EventArgs e)
+        {
+            DisplayPlotSize();
         }
     }
 }
