@@ -24,10 +24,10 @@ void init_shabal_sse() {
 // loc_startnonce	nonce to start generation at
 // local_nonces: 	number of nonces to generate
 void noncegen_sse(char *cache, const size_t cache_size, const size_t chunk_offset,
-                   const unsigned long long numeric_id, const unsigned long long local_startnonce,
-                   const unsigned long long local_nonces) {
+                   const uint64_t numeric_id, const uint64_t local_startnonce,
+                   const uint64_t local_nonces) {
     sph_shabal_context local_32;
-    unsigned long long nonce;
+    uint64_t nonce;
     size_t len;
 
     mshabal128_context_fast local_128_fast;
@@ -37,22 +37,13 @@ void noncegen_sse(char *cache, const size_t cache_size, const size_t chunk_offse
     char term[32];  // 1bit 1, 255bit of zeros
     char zero[32];  // 256bit of zeros
 
-    //vars shared
-    unsigned char* buffer = (unsigned char*)malloc(sizeof(unsigned char) * MSHABAL128_VECTOR_SIZE * NONCE_SIZE);
-    unsigned char* final = (unsigned char*)malloc(sizeof(unsigned char) * MSHABAL128_VECTOR_SIZE * HASH_SIZE);
-    
-    // create seed
-    uint64_t numericid;
-    numericid = bswap_64((uint64_t)numeric_id);  // change endianess
-    memmove(&seed[0], &numericid, 8);
-    memset(&seed[8], 0, 8);
-    seed[16] = -128;  // shabal message termination bit
-    memset(&seed[17], 0, 15);
-    // create zero
+    write_seed(seed, numeric_id);
+    write_term(term);
     memset(&zero[0], 0, 32);
-    // create term
-    term[0] = -128;  // shabal message termination bit
-    memset(&term[1], 0, 31);
+
+    //vars shared
+    uint8_t* buffer = (uint8_t*)malloc(sizeof(uint8_t) * MSHABAL128_VECTOR_SIZE * NONCE_SIZE);
+    uint8_t* final = (uint8_t*)malloc(sizeof(uint8_t) * MSHABAL128_VECTOR_SIZE * HASH_SIZE);
 
     // prepare smart SIMD aligned termination strings
     // creation could further be optimized, but not much in it as it only runs once per work package
@@ -90,7 +81,7 @@ void noncegen_sse(char *cache, const size_t cache_size, const size_t chunk_offse
         t3.words[j + 3 + 32] = *(mshabal_u32 *)(zero + o);
     }
 
-       for (unsigned long long n = 0; n < local_nonces;) {
+       for (uint64_t n = 0; n < local_nonces;) {
         // iterate nonces (4 per cycle - sse)
         // min 4 nonces left for sse processing, otherwise SISD
         if (n + 4 <= local_nonces) {
@@ -113,7 +104,7 @@ void noncegen_sse(char *cache, const size_t cache_size, const size_t chunk_offse
                 t2.words[j + 2 + 32] = *(mshabal_u32 *)((char *)&nonce3 + o);
                 t2.words[j + 3 + 32] = *(mshabal_u32 *)((char *)&nonce4 + o);
             }
-           
+
             // start shabal rounds
 
             // 3 cases: first 128 rounds uses case 1 or 2, after that case 3
@@ -122,7 +113,7 @@ void noncegen_sse(char *cache, const size_t cache_size, const size_t chunk_offse
             // case 3: round > 128: use termination string 3
             // round 1
             memcpy(&local_128_fast, &global_128_fast,
-                   sizeof(global_128_fast));  // fast initialize shabal     
+                   sizeof(global_128_fast));  // fast initialize shabal
 
             mshabal128_sse_openclose_fast(
                 &local_128_fast, NULL, &t1,
@@ -149,7 +140,7 @@ void noncegen_sse(char *cache, const size_t cache_size, const size_t chunk_offse
                                               &buffer[(i - HASH_SIZE) * MSHABAL128_VECTOR_SIZE],
                                               (NONCE_SIZE + 16 - i) >> 6);
                 }
-            }  
+            }
 
             // round 128-8192
             for (size_t i = NONCE_SIZE - HASH_CAP; i > 0; i -= HASH_SIZE) {
@@ -157,7 +148,7 @@ void noncegen_sse(char *cache, const size_t cache_size, const size_t chunk_offse
                                           &buffer[(i - HASH_SIZE) * MSHABAL128_VECTOR_SIZE],
                                           (HASH_CAP) >> 6);
             }
-           
+
             // generate final hash
             mshabal128_sse_openclose_fast(&local_128_fast, &buffer[0], &t1, &final[0],
                                       (NONCE_SIZE + 16) >> 6);
@@ -171,10 +162,10 @@ void noncegen_sse(char *cache, const size_t cache_size, const size_t chunk_offse
                 _mm_storeu_si128(
                     (__m128i *)buffer + j,
                     _mm_xor_si128(_mm_loadu_si128((__m128i *)buffer + j), F[j % 8]));
-            
+
             // todo: fork SIMD aligned plot file here
             // simd shabal words unpack + POC Shuffle + scatter nonces into optimised cache
-            
+
             for (int i = 0; i < NUM_SCOOPS * 2; i++) {
                 for (int j = 0; j < 32; j += 4) {
                     for (int k = 0; k < MSHABAL128_VECTOR_SIZE; k += 1) {
@@ -185,12 +176,12 @@ void noncegen_sse(char *cache, const size_t cache_size, const size_t chunk_offse
                     }
                 }
             }
-            
+
             n += 4;
         } else {
             // if less than 8 nonces left, use 1d-shabal
             int8_t *xv = (int8_t *)&numeric_id;
-            
+
             for (size_t i = 0; i < 8; i++) buffer[NONCE_SIZE + i] = xv[7 - i];
 
             nonce = local_startnonce + n;

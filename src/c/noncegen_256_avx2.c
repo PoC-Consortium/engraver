@@ -18,16 +18,16 @@ void init_shabal_avx2() {
     global_256_fast.Wlow = global_256.Wlow;
 }
 
-// cache:			cache to save to
+// cache:		cache to save to
 // local_num:		thread number
 // numeric_id:		numeric account id
 // loc_startnonce	nonce to start generation at
 // local_nonces: 	number of nonces to generate
 void noncegen_avx2(char *cache, const size_t cache_size, const size_t chunk_offset,
-                   const unsigned long long numeric_id, const unsigned long long local_startnonce,
-                   const unsigned long long local_nonces) {
+                   const uint64_t numeric_id, const uint64_t local_startnonce,
+                   const uint64_t local_nonces) {
     sph_shabal_context local_32;
-    unsigned long long nonce;
+    uint64_t nonce;
     size_t len;
 
     mshabal256_context_fast local_256_fast;
@@ -37,22 +37,13 @@ void noncegen_avx2(char *cache, const size_t cache_size, const size_t chunk_offs
     char term[32];  // 1bit 1, 255bit of zeros
     char zero[32];  // 256bit of zeros
 
-    //vars shared
-    unsigned char* buffer = (unsigned char*)malloc(sizeof(unsigned char) * MSHABAL256_VECTOR_SIZE * NONCE_SIZE);
-    unsigned char* final = (unsigned char*)malloc(sizeof(unsigned char) * MSHABAL256_VECTOR_SIZE * HASH_SIZE);
-    
-    // create seed
-    uint64_t numericid;
-    numericid = bswap_64((uint64_t)numeric_id);  // change endianess
-    memmove(&seed[0], &numericid, 8);
-    memset(&seed[8], 0, 8);
-    seed[16] = -128;  // shabal message termination bit
-    memset(&seed[17], 0, 15);
-    // create zero
+    write_seed(seed, numeric_id);
+    write_term(term);
     memset(&zero[0], 0, 32);
-    // create term
-    term[0] = -128;  // shabal message termination bit
-    memset(&term[1], 0, 31);
+
+    //vars shared
+    uint8_t* buffer = (uint8_t*)malloc(sizeof(uint8_t) * MSHABAL256_VECTOR_SIZE * NONCE_SIZE);
+    uint8_t* final = (uint8_t*)malloc(sizeof(uint8_t) * MSHABAL256_VECTOR_SIZE * HASH_SIZE);
 
     // prepare smart SIMD aligned termination strings
     // creation could further be optimized, but not much in it as it only runs once per work package
@@ -110,7 +101,7 @@ void noncegen_avx2(char *cache, const size_t cache_size, const size_t chunk_offs
         t3.words[j + 7 + 64] = *(mshabal_u32 *)(zero + o);
     }
 
-    for (unsigned long long n = 0; n < local_nonces;) {
+    for (uint64_t n = 0; n < local_nonces;) {
         // iterate nonces (8 per cycle - avx2)
         // min 8 nonces left for avx 2 processing, otherwise SISD
         if (n + 8 <= local_nonces) {

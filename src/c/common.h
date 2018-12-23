@@ -1,3 +1,5 @@
+#include <stdint.h>
+
 #pragma once
 
 #ifdef _MSC_VER
@@ -45,3 +47,13 @@
 #include <byteswap.h>
 
 #endif
+
+#define HASH_SIZE 32
+#define HASH_CAP 4096
+#define NUM_SCOOPS 4096
+#define SCOOP_SIZE 64
+#define NONCE_SIZE (HASH_CAP * SCOOP_SIZE)  // 4096*64
+
+void write_seed(char seed[32], uint64_t numeric_id);
+
+void write_term(char term[32]);

@@ -7,35 +7,26 @@ sph_shabal_context global_32;
 
 void init_shabal() { sph_shabal256_init(&global_32); }
 
-// cache:			cache to save to
+// cache:		cache to save to
 // local_num:		thread number
 // numeric_id:		numeric account id
 // loc_startnonce	nonce to start generation at
 // local_nonces: 	number of nonces to generate
 void noncegen(char *cache, const size_t cache_size, const size_t chunk_offset,
-              const unsigned long long numeric_id, const unsigned long long local_startnonce,
-              const unsigned long long local_nonces) {
-    unsigned long long nonce;
+              const uint64_t numeric_id, const uint64_t local_startnonce,
+              const uint64_t local_nonces) {
+    uint64_t nonce;
 
     char seed[32];  // 64bit numeric account ID, 64bit nonce (blank), 1bit termination, 127 bits zero
     char term[32];  // 1bit 1, 255bit of zeros
     char zero[32];  // 256bit of zeros
 
-    unsigned char *buffer = (unsigned char *)malloc(sizeof(unsigned char) * (NONCE_SIZE));
-    unsigned char *final = (unsigned char *)malloc(sizeof(unsigned char) * HASH_SIZE);
-
-    // create seed
-    uint64_t numericid;
-    numericid = bswap_64((uint64_t)numeric_id);  // change endianess
-    memmove(&seed[0], &numericid, 8);
-    memset(&seed[8], 0, 8);
-    seed[16] = -128;  // shabal message termination bit
-    memset(&seed[17], 0, 15);
-    // create zero
+    write_seed(seed, numeric_id);
+    write_term(term);
     memset(&zero[0], 0, 32);
-    // create term
-    term[0] = -128;  // shabal message termination bit
-    memset(&term[1], 0, 31);
+
+    uint8_t *buffer = (uint8_t *)malloc(sizeof(uint8_t) * (NONCE_SIZE));
+    uint8_t *final = (uint8_t *)malloc(sizeof(uint8_t) * HASH_SIZE);
 
     // prepare smart termination strings
     // creation could further be optimized, but not much in it as it only runs once per work package
@@ -57,9 +48,9 @@ void noncegen(char *cache, const size_t cache_size, const size_t chunk_offset,
         t3.words[j + 0 + 8] = *(sph_u32 *)(zero + o);
     }
 
-    for (unsigned long long n = 0; n < local_nonces;) {
+    for (uint64_t n = 0; n < local_nonces;) {
         // generate nonce numbers & change endianness
-        nonce = bswap_64((uint64_t)(local_startnonce + n));
+        nonce = bswap_64((local_startnonce + n));
 
         // store nonce numbers in relevant termination strings
         for (int j = 2; j < 4; j += 1) {
