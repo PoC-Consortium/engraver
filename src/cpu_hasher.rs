@@ -1,5 +1,6 @@
 use libc::{c_void, size_t, uint64_t};
 use std::sync::mpsc::Sender;
+use plotter::NONCE_SIZE;
 
 extern "C" {
     pub fn noncegen(

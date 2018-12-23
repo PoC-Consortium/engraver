@@ -7,10 +7,9 @@ use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::Path;
 use std::sync::Arc;
 use utils::{open, open_r, open_using_direct_io};
+use plotter::{NONCE_SIZE, SCOOP_SIZE};
 
 const TASK_SIZE: u64 = 16384;
-const SCOOP_SIZE: u64 = 64;
-const NONCE_SIZE: u64 = 4096 * SCOOP_SIZE;
 
 pub fn create_writer_thread(
     task: Arc<PlotterTask>,

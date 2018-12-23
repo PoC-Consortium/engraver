@@ -14,9 +14,9 @@ use std::sync::mpsc::channel;
 use std::sync::Arc;
 #[cfg(feature = "opencl")]
 use std::thread;
+use plotter::NONCE_SIZE;
 
 const CPU_TASK_SIZE: u64 = 64;
-const NONCE_SIZE: u64 = (2 << 17);
 
 pub fn create_scheduler_thread(
     task: Arc<PlotterTask>,

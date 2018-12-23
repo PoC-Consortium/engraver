@@ -12,14 +12,12 @@ use std::process;
 use std::slice::{from_raw_parts, from_raw_parts_mut};
 use std::sync::{Arc, Mutex};
 use std::u64;
+use plotter::{NONCE_SIZE, SCOOP_SIZE, NUM_SCOOPS};
 
 static SRC: &'static str = include_str!("ocl/kernel.cl");
 
-const NONCE_SIZE: u64 = (2 << 17);
-const NUM_SCOOPS: u64 = 4096;
 const GPU_HASHES_PER_RUN: usize = 32;
 const MSHABAL512_VECTOR_SIZE: u64 = 16;
-const SCOOP_SIZE: u64 = 64;
 
 // convert the info or error to a string for printing:
 macro_rules! to_string {

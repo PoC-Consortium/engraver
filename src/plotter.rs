@@ -25,8 +25,9 @@ use utils::preallocate;
 use utils::set_thread_ideal_processor;
 use writer::{create_writer_thread, read_resume_info, write_resume_info};
 
-const NONCE_SIZE: u64 = (2 << 17);
-const SCOOP_SIZE: u64 = 64;
+pub const SCOOP_SIZE: u64 = 64;
+pub const NUM_SCOOPS: u64 = 4096;
+pub const NONCE_SIZE: u64 = SCOOP_SIZE * NUM_SCOOPS;
 
 pub struct Plotter {}
 
