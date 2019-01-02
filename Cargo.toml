@@ -6,6 +6,11 @@ authors = ["PoC Consortium <bots@cryptoguru.org>"]
 description = """
 Engraver - a Burst plotter written in Rust
 """
+repository = "https://github.com/PoC-Consortium/engraver"
+documentation = "https://github.com/PoC-Consortium/engraver"
+keywords = ["burstcoin", "plotter", "rust","cryptocurrency"]
+readme = "README.md"
+
 [features]
 opencl = ["ocl-core"]
 
