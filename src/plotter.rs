@@ -60,7 +60,11 @@ pub struct Buffer {
 
 impl Buffer {
     fn new(buffer_size: usize) -> Self {
-        let data = vec![1u8; buffer_size];
+        let pointer = aligned_alloc::aligned_alloc(buffer_size, page_size::get());
+        let data: Vec<u8>;
+        unsafe { 
+            data = Vec::from_raw_parts(pointer as *mut u8, buffer_size, buffer_size);
+        }
         Buffer {
             data: Arc::new(Mutex::new(data)),
         }
@@ -255,7 +259,7 @@ impl Plotter {
 
         for _ in 0..num_buffer {
             let buffer = Buffer::new(buffer_size as usize);
-            tx_empty_buffers.send(buffer);
+            tx_empty_buffers.send(buffer).unwrap();
         }
 
         let mut mb = MultiBar::new();

@@ -89,7 +89,7 @@ pub fn create_writer_thread(
             if !task.benchmark {
                 write_resume_info(&filename, nonces_written);
             }
-            tx_empty_buffers.send(buffer);
+            tx_empty_buffers.send(buffer).unwrap();
         }
     }
 }

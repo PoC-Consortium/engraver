@@ -91,7 +91,7 @@ pub fn create_scheduler_thread(
                         numeric_id: task.numeric_id,
                         local_startnonce: task.start_nonce + nonces_hashed + requested,
                         local_nonces: task_size,
-                    }));
+                    })).unwrap();
                 }
                 requested += task_size;
                 //println!("Debug: Device: {} started. {} nonces assigned. Total requested: {}\n\n\n",i+1,task_size,requested);
@@ -106,8 +106,8 @@ pub fn create_scheduler_thread(
                             cache: SafeCVoid {
                                 ptr: bs.as_ptr() as *mut c_void,
                             },
-                            cache_size: buffer_size / NONCE_SIZE as size_t,
-                            chunk_offset: requested as size_t,
+                            cache_size: (buffer_size / NONCE_SIZE) as usize,
+                            chunk_offset: requested as usize,
                             numeric_id: task.numeric_id,
                             local_startnonce: task.start_nonce + nonces_hashed + requested,
                             local_nonces: task_size,
@@ -136,7 +136,7 @@ pub fn create_scheduler_thread(
                                             cache: SafeCVoid {
                                                 ptr: bs.as_ptr() as *mut c_void,
                                             },
-                                            cache_size: buffer_size / NONCE_SIZE as size_t,
+                                            cache_size: (buffer_size / NONCE_SIZE) as usize,
                                             chunk_offset: requested as size_t,
                                             numeric_id: task.numeric_id,
                                             local_startnonce: task.start_nonce
@@ -182,7 +182,7 @@ pub fn create_scheduler_thread(
                                     numeric_id: task.numeric_id,
                                     local_startnonce: task.start_nonce + nonces_hashed + requested,
                                     local_nonces: task_size,
-                                }));
+                                })).unwrap();
                                 task_size
                             }
                         };
@@ -210,7 +210,7 @@ pub fn create_scheduler_thread(
             nonces_hashed += nonces_to_hash;
 
             // queue buffer for writing
-            tx_buffers_to_writer.send(buffer);
+            tx_buffers_to_writer.send(buffer).unwrap();
 
             // thread end
             if task.nonces == nonces_hashed {
@@ -223,7 +223,7 @@ pub fn create_scheduler_thread(
                 // shutdown gpu threads
                 #[cfg(feature = "opencl")]
                 for gpu in &gpu_channels {
-                    gpu.0.send(None);
+                    gpu.0.send(None).unwrap();
                 }
                 break;
             };
