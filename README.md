@@ -2,7 +2,7 @@
  
  [![Build Status](https://travis-ci.org/PoC-Consortium/engraver.svg?branch=master)](https://travis-ci.org/PoC-Consortium/engraver)
 
-# Engraver - Burstplotter in Rust
+# Engraver - PoC2 plotter in Rust
 
 ### Features
 - windows, linux, unix & macOS

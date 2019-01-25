@@ -72,7 +72,7 @@ fn main() {
         /*
         .subcommand(
             SubCommand::with_name("plot")
-                .about("Plots a PoC2 file for your burst account")
+                .about("Plots a PoC2 file for your account ID")
                 .setting(ArgRequiredElseHelp)
                 .setting(DeriveDisplayOrder)
                 */.arg(
@@ -80,7 +80,7 @@ fn main() {
                         .short("i")
                         .long("id")
                         .value_name("numeric_ID")
-                        .help("your numeric Burst ID")
+                        .help("your numeric Account ID")
                         .takes_value(true)
                         .required_unless("ocl-devices"),
                 ).arg(
@@ -149,14 +149,14 @@ fn main() {
                 
         ).subcommand(
             SubCommand::with_name("encode")
-                .about("*Individualizes a PoC3 reference file for your burst account")
+                .about("*Individualizes a PoC3 reference file for your account ID")
                 .display_order(2)
                 .arg(
                     Arg::with_name("numeric id")
                         .short("i")
                         .long("numeric_ID")
                         .value_name("numeric ID")
-                        .help("numeric Burst ID")
+                        .help("numeric Account ID")
                         .takes_value(true),
                 ),
         ).subcommand(
@@ -168,7 +168,7 @@ fn main() {
                         .short("i")
                         .long("numeric_ID")
                         .value_name("numeric ID")
-                        .help("numeric Burst ID")
+                        .help("numeric Account ID")
                         .takes_value(true)
                         .required(true),
                 ),
@@ -183,7 +183,8 @@ fn main() {
                 .long("opencl")
                 .help("Display OpenCL platforms and devices")
                 .global(true),
-        ).arg(
+        )
+        .arg(
             Arg::with_name("zero-copy")
                 .short("z")
                 .long("zcb")

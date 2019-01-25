@@ -6,13 +6,13 @@ use self::core::{
 };
 use gpu_hasher::GpuTask;
 use ocl::rayon::prelude::*;
+use plotter::{NONCE_SIZE, NUM_SCOOPS, SCOOP_SIZE};
 use std::cmp::min;
 use std::ffi::CString;
 use std::process;
 use std::slice::{from_raw_parts, from_raw_parts_mut};
 use std::sync::{Arc, Mutex};
 use std::u64;
-use plotter::{NONCE_SIZE, SCOOP_SIZE, NUM_SCOOPS};
 
 static SRC: &'static str = include_str!("ocl/kernel.cl");
 
@@ -73,7 +73,8 @@ impl GpuContext {
             &CString::new("").unwrap(),
             None,
             None,
-        ).unwrap();
+        )
+        .unwrap();
         let queue_a = core::create_command_queue(&context, &device_id, None).unwrap();
         let queue_b = core::create_command_queue(&context, &device_id, None).unwrap();
         let kernel = core::create_kernel(&program, "calculate_nonces").unwrap();
@@ -92,7 +93,8 @@ impl GpuContext {
                     core::MEM_READ_WRITE | core::MEM_ALLOC_HOST_PTR,
                     (NONCE_SIZE as usize) * worksize,
                     None,
-                ).unwrap()
+                )
+                .unwrap()
             };
             let buffer_gpu_b = unsafe {
                 core::create_buffer::<_, u8>(
@@ -100,7 +102,8 @@ impl GpuContext {
                     core::MEM_READ_WRITE | core::MEM_ALLOC_HOST_PTR,
                     (NONCE_SIZE as usize) * worksize,
                     None,
-                ).unwrap()
+                )
+                .unwrap()
             };
             GpuContext {
                 queue_a,
@@ -122,7 +125,8 @@ impl GpuContext {
                     core::MEM_READ_WRITE | core::MEM_ALLOC_HOST_PTR,
                     (NONCE_SIZE as usize) * worksize,
                     None,
-                ).unwrap()
+                )
+                .unwrap()
             };
             let buffer_ptr_host = unsafe {
                 Some(
@@ -135,7 +139,8 @@ impl GpuContext {
                         worksize * NONCE_SIZE as usize,
                         None::<Event>,
                         None::<&mut Event>,
-                    ).unwrap(),
+                    )
+                    .unwrap(),
                 )
             };
             let buffer_gpu_a = if nvidia {
@@ -147,7 +152,8 @@ impl GpuContext {
                         core::MEM_READ_WRITE,
                         (NONCE_SIZE as usize) * worksize,
                         None,
-                    ).unwrap()
+                    )
+                    .unwrap()
                 }
             };
             let buffer_gpu_b = unsafe {
@@ -156,7 +162,8 @@ impl GpuContext {
                     core::MEM_READ_WRITE,
                     (NONCE_SIZE as usize) * worksize,
                     None,
-                ).unwrap()
+                )
+                .unwrap()
             };
 
             let buffer_host = if nvidia { None } else { Some(buffer_host) };
@@ -242,7 +249,8 @@ pub fn gpu_get_info(gpus: &[String], quiet: bool) -> u64 {
             &CString::new("").unwrap(),
             None,
             None,
-        ).unwrap();
+        )
+        .unwrap();
         let kernel = core::create_kernel(&program, "calculate_nonces").unwrap();
         let kernel_workgroup_size = get_kernel_work_group_size(&kernel, device);
 
@@ -342,17 +350,20 @@ pub fn gpu_hash(gpu_context: &Arc<Mutex<GpuContext>>, task: &GpuTask) {
         &gpu_context.kernel,
         0,
         ArgVal::mem(&gpu_context.buffer_gpu_a),
-    ).unwrap();
+    )
+    .unwrap();
     core::set_kernel_arg(
         &gpu_context.kernel,
         1,
         ArgVal::primitive(&task.local_startnonce),
-    ).unwrap();
+    )
+    .unwrap();
     core::set_kernel_arg(
         &gpu_context.kernel,
         5,
         ArgVal::primitive(&task.local_nonces),
-    ).unwrap();
+    )
+    .unwrap();
     core::set_kernel_arg(&gpu_context.kernel, 2, ArgVal::primitive(&numeric_id_be)).unwrap();
 
     for i in (0..8192).step_by(GPU_HASHES_PER_RUN) {
@@ -377,7 +388,8 @@ pub fn gpu_hash(gpu_context: &Arc<Mutex<GpuContext>>, task: &GpuTask) {
                 Some(gpu_context.ldim1),
                 None::<Event>,
                 None::<&mut Event>,
-            ).unwrap();
+            )
+            .unwrap();
         }
     }
     core::finish(&gpu_context.queue_a).unwrap();
@@ -455,17 +467,20 @@ pub fn gpu_hash_and_transfer_to_host(
         } else {
             &gpu_context.buffer_gpu_b
         }),
-    ).unwrap();
+    )
+    .unwrap();
     core::set_kernel_arg(
         &gpu_context.kernel,
         1,
         ArgVal::primitive(&hasher_task.local_startnonce),
-    ).unwrap();
+    )
+    .unwrap();
     core::set_kernel_arg(
         &gpu_context.kernel,
         5,
         ArgVal::primitive(&hasher_task.local_nonces),
-    ).unwrap();
+    )
+    .unwrap();
     core::set_kernel_arg(&gpu_context.kernel, 2, ArgVal::primitive(&numeric_id_be)).unwrap();
 
     for i in (0..8192).step_by(GPU_HASHES_PER_RUN) {
@@ -488,7 +503,8 @@ pub fn gpu_hash_and_transfer_to_host(
                 Some(gpu_context.ldim1),
                 None::<Event>,
                 None::<&mut Event>,
-            ).unwrap();
+            )
+            .unwrap();
         }
     }
     core::finish(&gpu_context.queue_b).unwrap();
@@ -511,7 +527,8 @@ fn mem_map_gpu_to_host(buffer_id: u8, gpu_context: &GpuContext) -> core::MemMap<
                 gpu_context.gdim1[0] * NONCE_SIZE as usize,
                 None::<Event>,
                 None::<&mut Event>,
-            ).unwrap()
+            )
+            .unwrap()
         } else {
             core::enqueue_map_buffer::<u8, _, _, _>(
                 &gpu_context.queue_b,
@@ -522,7 +539,8 @@ fn mem_map_gpu_to_host(buffer_id: u8, gpu_context: &GpuContext) -> core::MemMap<
                 gpu_context.gdim1[0] * NONCE_SIZE as usize,
                 None::<Event>,
                 None::<&mut Event>,
-            ).unwrap()
+            )
+            .unwrap()
         }
     }
 }
@@ -536,7 +554,8 @@ fn mem_unmap_gpu_to_host(buffer_id: u8, gpu_context: &GpuContext, map: Option<co
             &map.unwrap(),
             None::<Event>,
             None::<&mut Event>,
-        ).unwrap()
+        )
+        .unwrap()
     } else {
         core::enqueue_unmap_mem_object(
             &gpu_context.queue_a,
@@ -544,7 +563,8 @@ fn mem_unmap_gpu_to_host(buffer_id: u8, gpu_context: &GpuContext, map: Option<co
             &map.unwrap(),
             None::<Event>,
             None::<&mut Event>,
-        ).unwrap()
+        )
+        .unwrap()
     };
 }
 
@@ -559,7 +579,8 @@ fn mem_transfer_gpu_to_host(buffer_id: u8, gpu_context: &GpuContext, slice: &mut
                 slice,
                 None::<Event>,
                 None::<&mut Event>,
-            ).unwrap();
+            )
+            .unwrap();
         } else {
             core::enqueue_read_buffer(
                 &gpu_context.queue_b,
@@ -569,7 +590,8 @@ fn mem_transfer_gpu_to_host(buffer_id: u8, gpu_context: &GpuContext, slice: &mut
                 slice,
                 None::<Event>,
                 None::<&mut Event>,
-            ).unwrap();
+            )
+            .unwrap();
         }
     }
 }

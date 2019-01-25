@@ -32,7 +32,6 @@ pub const NONCE_SIZE: u64 = SCOOP_SIZE * NUM_SCOOPS;
 pub struct Plotter {}
 
 extern "C" {
-    pub fn init_shabal() -> ();
     pub fn init_shabal_sse() -> ();
     pub fn init_shabal_avx() -> ();
     pub fn init_shabal_avx2() -> ();
@@ -62,7 +61,7 @@ impl Buffer {
     fn new(buffer_size: usize) -> Self {
         let pointer = aligned_alloc::aligned_alloc(buffer_size, page_size::get());
         let data: Vec<u8>;
-        unsafe { 
+        unsafe {
             data = Vec::from_raw_parts(pointer as *mut u8, buffer_size, buffer_size);
         }
         Buffer {
@@ -129,10 +128,7 @@ impl Plotter {
             task.nonces = free_disk_space / NONCE_SIZE;
         }
 
-        let gpu = match &task.gpus {
-            Some(_) => true,
-            None => false,
-        };
+        let gpu = &task.gpus.is_some();
 
         // align number of nonces with sector size if direct i/o
         let mut rounded_nonces_to_sector_size = false;
@@ -296,7 +292,7 @@ impl Plotter {
                 "AVX2" => init_shabal_avx2(),
                 "AVX" => init_shabal_avx(),
                 "SSE2" => init_shabal_sse(),
-                _ => init_shabal(),
+                _ => (),
             }
         }
 
@@ -324,7 +320,8 @@ impl Plotter {
                             #[cfg(windows)]
                             set_thread_ideal_processor(id % core_ids.len());
                         }
-                    }).build()
+                    })
+                    .build()
                     .unwrap(),
                 progress,
                 p1x,

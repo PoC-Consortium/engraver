@@ -119,10 +119,10 @@ pub fn hash_cpu(
 #[cfg(test)]
 mod test {
     extern crate crypto;
-    use super::*;
-    use plotter;
     use self::crypto::digest::Digest;
     use self::crypto::sha2::Sha256;
+    use super::*;
+    use plotter;
 
     #[test]
     fn test_noncegen() {
@@ -202,7 +202,6 @@ mod test {
 
         let mut buf = vec![0; 64 * plotter::NONCE_SIZE as usize];
         unsafe {
-            plotter::init_shabal();
             noncegen(
                 buf.as_mut_ptr() as *mut c_void,
                 0,
@@ -215,4 +214,3 @@ mod test {
         check_result(&buf);
     }
 }
-

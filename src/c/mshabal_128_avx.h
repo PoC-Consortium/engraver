@@ -156,7 +156,7 @@ void mshabal128_avx_close(mshabal128_context *sc, unsigned ub0, unsigned ub1, un
                       unsigned ub3, unsigned n, void *dst0, void *dst1, void *dst2, void *dst3);
 
 /*
- * Optimised Shabal Routine for Burstcoin Plotting
+ * Optimised Shabal Routine for PoC Plotting
  * sc:				optimised shabal context, not containing any data buffers
  * message:		message to be hashed. message should be a multiple of 512 bit (a shabal
  * "message block"). a remainder would need to be stored in termination string.

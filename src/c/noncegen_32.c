@@ -3,9 +3,6 @@
 #include <string.h>
 #include "common.h"
 #include "sph_shabal.h"
-sph_shabal_context global_32;
-
-void init_shabal() { sph_shabal256_init(&global_32); }
 
 // cache:		cache to save to
 // local_num:		thread number

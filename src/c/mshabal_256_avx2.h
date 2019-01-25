@@ -164,7 +164,7 @@ void mshabal256_close(mshabal256_context *sc, unsigned ub0, unsigned ub1, unsign
                       void *dst5, void *dst6, void *dst7);
 
 /*
- * Optimised Shabal Routine for Burstcoin Plotting
+ * Optimised Shabal Routine for PoC Plotting
  * sc:				optimised shabal context, not containing any data buffers
  * message:		message to be hashed. message should be a multiple of 512 bit (a shabal
  * "message block"). a remainder would need to be stored in termination string.

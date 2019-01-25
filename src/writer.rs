@@ -2,12 +2,12 @@ extern crate pbr;
 
 use chan;
 use plotter::{Buffer, PlotterTask};
+use plotter::{NONCE_SIZE, SCOOP_SIZE};
 use std::cmp::min;
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::Path;
 use std::sync::Arc;
 use utils::{open, open_r, open_using_direct_io};
-use plotter::{NONCE_SIZE, SCOOP_SIZE};
 
 const TASK_SIZE: u64 = 16384;
 
@@ -48,8 +48,9 @@ pub fn create_writer_thread(
                     for _ in 0..nonces_to_write / TASK_SIZE {
                         file.write_all(
                             &bs[local_addr as usize
-                                    ..(local_addr + TASK_SIZE * SCOOP_SIZE) as usize],
-                        ).unwrap();
+                                ..(local_addr + TASK_SIZE * SCOOP_SIZE) as usize],
+                        )
+                        .unwrap();
 
                         local_addr += TASK_SIZE * SCOOP_SIZE;
                     }
@@ -58,9 +59,10 @@ pub fn create_writer_thread(
                     if nonces_to_write % TASK_SIZE > 0 {
                         file.write_all(
                             &bs[local_addr as usize
-                                    ..(local_addr + (nonces_to_write % TASK_SIZE) * SCOOP_SIZE)
-                                        as usize],
-                        ).unwrap();
+                                ..(local_addr + (nonces_to_write % TASK_SIZE) * SCOOP_SIZE)
+                                    as usize],
+                        )
+                        .unwrap();
                     }
 
                     if (scoop + 1) % 128 == 0 {
@@ -83,6 +85,7 @@ pub fn create_writer_thread(
                     }
                     None => (),
                 }
+                tx_empty_buffers.send(buffer).unwrap();
                 break;
             }
 

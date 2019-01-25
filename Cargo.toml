@@ -1,14 +1,14 @@
 [package]
 name = "engraver"
-version = "2.2.0"
+version = "2.4.0"
 license = "GPL-3.0"
 authors = ["PoC Consortium <bots@cryptoguru.org>"]
 description = """
-Engraver - a Burst plotter written in Rust
+Engraver - a PoC2 plotter written in Rust
 """
 repository = "https://github.com/PoC-Consortium/engraver"
 documentation = "https://github.com/PoC-Consortium/engraver"
-keywords = ["burstcoin", "plotter", "rust","cryptocurrency"]
+keywords = ["poc2", "plotter", "rust","cryptocurrency"]
 readme = "README.md"
 
 [features]
@@ -39,3 +39,6 @@ winapi = { version = "0.3", features = ["std","fileapi","securitybaseapi"] }
 
 [build-dependencies]
 cc = "1.0"
+
+[dev-dependencies]
+rust-crypto = "0.2.36"
