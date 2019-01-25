@@ -128,7 +128,7 @@ impl Plotter {
             task.nonces = free_disk_space / NONCE_SIZE;
         }
 
-        let gpu = &task.gpus.is_some();
+        let gpu = task.gpus.is_some();
 
         // align number of nonces with sector size if direct i/o
         let mut rounded_nonces_to_sector_size = false;
