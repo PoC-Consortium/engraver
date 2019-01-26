@@ -1,31 +1,31 @@
 /*
- * A parallel implementation of Shabal, for platforms with SSE2.
+ * A parallel implementation of Shabal, for platforms with AVX2.
  *
  * This is the header file for an implementation of the Shabal family
  * of hash functions, designed for maximum parallel speed. It processes
- * up to four instances of Shabal in parallel, using the SSE2 unit.
+ * up to four instances of Shabal in parallel, using the AVX2 unit.
  * Total bandwidth appear to be up to twice that of a plain 32-bit
  * Shabal implementation.
  *
- * A computation uses a mshabal256_context structure. That structure is
+ * A computation uses a mshabal_context structure. That structure is
  * supposed to be allocated and released by the caller, e.g. as a
  * local or global variable, or on the heap. The structure contents
- * are initialized with mshabal256_init(). Once the structure has been
- * initialized, data is input as chunks, with the mshabal256() functions.
+ * are initialized with mshabal_init(). Once the structure has been
+ * initialized, data is input as chunks, with the mshabal() functions.
  * Chunks for the four parallel instances are provided simultaneously
  * and must have the same length. It is allowed not to use some of the
- * instances; the corresponding parameters in mshabal256() are then NULL.
+ * instances; the corresponding parameters in mshabal() are then NULL.
  * However, using NULL as a chunk for one of the instances effectively
  * deactivates that instance; this cannot be used to "skip" a chunk
  * for one instance.
  *
- * The computation is finalized with mshabal256_close(). Some extra message
+ * The computation is finalized with mshabal_close(). Some extra message
  * bits (0 to 7) can be input. The outputs of the four parallel instances
  * are written in the provided buffers. There again, NULL can be
  * provided as parameter is the output of one of the instances is not
  * needed.
  *
- * A mshabal256_context instance is self-contained and holds no pointer.
+ * A mshabal_context instance is self-contained and holds no pointer.
  * Thus, it can be cloned (e.g. with memcpy()) or moved (as long as
  * proper alignment is maintained). This implementation uses no state
  * variable beyond the context instance; this, it is thread-safe and
@@ -53,8 +53,8 @@
  * <thomas.pornin@cryptolog.com>
  */
 
-#ifndef MSHABAL256_H__
-#define MSHABAL256_H__
+#ifndef MSHABAL_H__
+#define MSHABAL_H__
 
 #include <limits.h>
 
@@ -81,7 +81,6 @@ typedef unsigned long mshabal_u32;
 #endif
 #endif
 
-#define MSHABAL256_FACTOR 2
 #define MSHABAL256_VECTOR_SIZE 8
 
 /*
@@ -99,18 +98,17 @@ typedef struct {
     unsigned char buf6[64];
     unsigned char buf7[64];
     size_t ptr;
-    mshabal_u32 state[(12 + 16 + 16) * 4 * MSHABAL256_FACTOR];
+    mshabal_u32 state[(12 + 16 + 16) * MSHABAL256_VECTOR_SIZE];
     mshabal_u32 Whigh, Wlow;
     unsigned out_size;
 } mshabal256_context;
 
 #pragma pack(1)
 typedef struct {
-    mshabal_u32 state[(12 + 16 + 16) * 4 * MSHABAL256_FACTOR];
+    mshabal_u32 state[(12 + 16 + 16) * MSHABAL256_VECTOR_SIZE];
     mshabal_u32 Whigh, Wlow;
     unsigned out_size;
 } mshabal256_context_fast;
-
 #pragma pack()
 
 /*
@@ -118,7 +116,7 @@ typedef struct {
  * of 32, between 32 and 512 (inclusive). The output size is expressed
  * in bits.
  */
-void mshabal256_init(mshabal256_context *sc, unsigned out_size);
+void mshabal_init_avx2(mshabal256_context *sc, unsigned out_size);
 
 /*
  * Process some more data bytes; four chunks of data, pointed to by
@@ -132,9 +130,8 @@ void mshabal256_init(mshabal256_context *sc, unsigned out_size);
  * corresponding instance is deactivated (the final value obtained from
  * that instance is undefined).
  */
-void mshabal256(mshabal256_context *sc, const void *data0, const void *data1, const void *data2,
-                const void *data3, const void *data4, const void *data5, const void *data6,
-                const void *data7, size_t len);
+void mshabal_avx2(mshabal256_context *sc, const void *data0, const void *data1, const void *data2, const void *data3, 
+                const void *data4, const void *data5, const void *data6, const void *data7, size_t len);
 
 /*
  * Terminate the Shabal computation incarnated by the provided context
@@ -150,38 +147,31 @@ void mshabal256(mshabal256_context *sc, const void *data0, const void *data1, co
  * The Shabal output for each of the parallel instances is written out
  * in the areas pointed to by, respectively, dst0, dst1, dst2 and dst3.
  * These areas shall be wide enough to accomodate the result (result
- * size was specified as parameter to mshabal256_init()). It is acceptable
+ * size was specified as parameter to mshabal_init()). It is acceptable
  * to use NULL for any of those pointers, if the result from the
  * corresponding instance is not needed.
  *
  * After this call, the context structure is invalid. The caller shall
- * release it, or reinitialize it with mshabal256_init(). The mshabal256_close()
- * function does NOT imply a hidden call to mshabal256_init().
+ * release it, or reinitialize it with mshabal_init(). The mshabal_close()
+ * function does NOT imply a hidden call to mshabal_init().
  */
-void mshabal256_close(mshabal256_context *sc, unsigned ub0, unsigned ub1, unsigned ub2,
+void mshabal_close_avx2(mshabal256_context *sc, unsigned ub0, unsigned ub1, unsigned ub2,
                       unsigned ub3, unsigned ub4, unsigned ub5, unsigned ub6, unsigned ub7,
                       unsigned n, void *dst0, void *dst1, void *dst2, void *dst3, void *dst4,
                       void *dst5, void *dst6, void *dst7);
 
 /*
- * Optimised Shabal Routine for PoC Plotting
- * sc:				optimised shabal context, not containing any data buffers
- * message:		message to be hashed. message should be a multiple of 512 bit (a shabal
- * "message block"). a remainder would need to be stored in termination string.
- * termination:	512 bit termination string. comprises of a msg remainder (if any), one bit for
- * termination set to 1 and all remaining bit set to 0
- *
- * The Shabal output is written out in the area pointed to by dst. Output is still paritioned in
- * 32bit words and vectorized. An unpacking should only take place after the full nonce has been
- * generated.
- *
- * After this call, the context structure is invalid. The caller shall
- * release it, or reinitialize it with mshabal256_init() or load a copy of a virgin context.
- * The mshabal256_close() function does NOT imply a hidden call to mshabal256_init().
+ * optimised Shabal routine for PoC plotting and hashing
  */
 void mshabal256_openclose_fast(mshabal256_context_fast *sc, void *message, void *termination,
                                void *dst, unsigned len);
 
+/*
+ * optimised Shabal routine for PoC mining
+ */
+void mshabal_deadline_fast_avx2(mshabal256_context_fast *sc, void *message, void *termination, void *dst0,
+                                    void *dst1, void *dst2, void *dst3, void *dst4, void *dst5,
+                                    void *dst6, void *dst7);
 #ifdef __cplusplus
 }
 #endif

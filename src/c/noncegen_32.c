@@ -63,7 +63,7 @@ void noncegen(char *cache, const size_t cache_size, const size_t chunk_offset,
         // case 2: first 128 rounds, hashes are odd: use termination string 2
         // case 3: round > 128: use termination string 3
         // round 1
-        sph_shabal_openclose_fast(NULL, &t1, &buffer[NONCE_SIZE - HASH_SIZE], 16 >> 6);
+        sph_shabal_hash_fast(NULL, &t1, &buffer[NONCE_SIZE - HASH_SIZE], 16 >> 6);
 
         // store first hash into smart termination string 2
         memcpy(&t2, &buffer[NONCE_SIZE - HASH_SIZE], HASH_SIZE);
@@ -74,22 +74,22 @@ void noncegen(char *cache, const size_t cache_size, const size_t chunk_offset,
             // remainder
             if (i % 64 == 0) {
                 // last msg = seed + termination
-                sph_shabal_openclose_fast(&buffer[i], &t1, &buffer[i - HASH_SIZE],
+                sph_shabal_hash_fast(&buffer[i], &t1, &buffer[i - HASH_SIZE],
                                           (NONCE_SIZE + 16 - i) >> 6);
             } else {
                 // last msg = 256 bit data + seed + termination
-                sph_shabal_openclose_fast(&buffer[i], &t2, &buffer[i - HASH_SIZE],
+                sph_shabal_hash_fast(&buffer[i], &t2, &buffer[i - HASH_SIZE],
                                           (NONCE_SIZE + 16 - i) >> 6);
             }
         }
 
         // round 128-8192
         for (size_t i = NONCE_SIZE - HASH_CAP; i > 0; i -= HASH_SIZE) {
-            sph_shabal_openclose_fast(&buffer[i], &t3, &buffer[i - HASH_SIZE], (HASH_CAP) >> 6);
+            sph_shabal_hash_fast(&buffer[i], &t3, &buffer[i - HASH_SIZE], (HASH_CAP) >> 6);
         }
 
         // generate final hash
-        sph_shabal_openclose_fast(&buffer[0], &t1, &final[0], (NONCE_SIZE + 16) >> 6);
+        sph_shabal_hash_fast(&buffer[0], &t1, &final[0], (NONCE_SIZE + 16) >> 6);
 
         // XOR with final
         for (size_t i = 0; i < NONCE_SIZE; i++) buffer[i] ^= (final[i % HASH_SIZE]);

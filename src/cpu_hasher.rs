@@ -10,7 +10,7 @@ extern "C" {
         local_startnonce: uint64_t,
         local_nonces: uint64_t,
     );
-    pub fn noncegen_sse(
+    pub fn noncegen_sse2(
         cache: *mut c_void,
         cache_size: size_t,
         chunk_offset: size_t,
@@ -89,7 +89,7 @@ pub fn hash_cpu(
                     hasher_task.local_startnonce,
                     hasher_task.local_nonces,
                 ),
-                "SSE2" => noncegen_sse(
+                "SSE2" => noncegen_sse2(
                     hasher_task.cache.ptr,
                     hasher_task.cache_size,
                     hasher_task.chunk_offset,
@@ -187,8 +187,8 @@ mod test {
         if is_x86_feature_detected!("sse2") {
             let mut buf = vec![0; 64 * plotter::NONCE_SIZE as usize];
             unsafe {
-                plotter::init_shabal_sse();
-                noncegen_sse(
+                plotter::init_shabal_sse2();
+                noncegen_sse2(
                     buf.as_mut_ptr() as *mut c_void,
                     0,
                     0,

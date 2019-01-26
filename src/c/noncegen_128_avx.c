@@ -11,7 +11,7 @@ mshabal128_context_fast global_128_fast;
 
 void init_shabal_avx() {
     sph_shabal256_init(&global_32);
-    mshabal128_avx_init(&global_128, 256);
+    mshabal_init_avx(&global_128, 256);
     global_128_fast.out_size = global_128.out_size;
     for (int i = 0; i < 176; i++) global_128_fast.state[i] = global_128.state[i];
     global_128_fast.Whigh = global_128.Whigh;
@@ -49,11 +49,11 @@ void noncegen_avx(char *cache, const size_t cache_size, const size_t chunk_offse
     // creation could further be optimized, but not much in it as it only runs once per work package
     // creation could also be moved to plotter start
     union {
-        mshabal_u32 words[64];
+        mshabal_u32 words[16 * MSHABAL128_VECTOR_SIZE];
         __m128i data[16];
     } t1, t2, t3;
 
-    for (int j = 0; j < 64 / 2; j += 4) {
+    for (int j = 0; j < 16 * MSHABAL128_VECTOR_SIZE / 2; j += MSHABAL128_VECTOR_SIZE) {
         size_t o = j;
         // t1
         t1.words[j + 0] = *(mshabal_u32 *)(seed + o);
@@ -92,7 +92,7 @@ void noncegen_avx(char *cache, const size_t cache_size, const size_t chunk_offse
             nonce4 = bswap_64((uint64_t)(local_startnonce + n + 3));
 
             // store nonce numbers in relevant termination strings
-            for (int j = 8; j < 16; j += 4) {
+            for (int j = 8; j < 16; j += MSHABAL128_VECTOR_SIZE) {
                 size_t o = j - 8;
                 // t1
                 t1.words[j + 0] = *(mshabal_u32 *)((char *)&nonce1 + o);
@@ -115,7 +115,7 @@ void noncegen_avx(char *cache, const size_t cache_size, const size_t chunk_offse
             memcpy(&local_128_fast, &global_128_fast,
                    sizeof(global_128_fast));  // fast initialize shabal
 
-            mshabal128_avx_openclose_fast(
+            mshabal_hash_fast_avx(
                 &local_128_fast, NULL, &t1,
                 &buffer[MSHABAL128_VECTOR_SIZE * (NONCE_SIZE - HASH_SIZE)], 16 >> 6);
 
@@ -129,13 +129,13 @@ void noncegen_avx(char *cache, const size_t cache_size, const size_t chunk_offse
                 // remainder
                 if (i % 64 == 0) {
                     // last msg = seed + termination
-                    mshabal128_avx_openclose_fast(&local_128_fast, &buffer[i * MSHABAL128_VECTOR_SIZE],
+                    mshabal_hash_fast_avx(&local_128_fast, &buffer[i * MSHABAL128_VECTOR_SIZE],
                                               &t1,
                                               &buffer[(i - HASH_SIZE) * MSHABAL128_VECTOR_SIZE],
                                               (NONCE_SIZE + 16 - i) >> 6);
                 } else {
                     // last msg = 256 bit data + seed + termination
-                    mshabal128_avx_openclose_fast(&local_128_fast, &buffer[i * MSHABAL128_VECTOR_SIZE],
+                    mshabal_hash_fast_avx(&local_128_fast, &buffer[i * MSHABAL128_VECTOR_SIZE],
                                               &t2,
                                               &buffer[(i - HASH_SIZE) * MSHABAL128_VECTOR_SIZE],
                                               (NONCE_SIZE + 16 - i) >> 6);
@@ -144,13 +144,13 @@ void noncegen_avx(char *cache, const size_t cache_size, const size_t chunk_offse
 
             // round 128-8192
             for (size_t i = NONCE_SIZE - HASH_CAP; i > 0; i -= HASH_SIZE) {
-                mshabal128_avx_openclose_fast(&local_128_fast, &buffer[i * MSHABAL128_VECTOR_SIZE], &t3,
+                mshabal_hash_fast_avx(&local_128_fast, &buffer[i * MSHABAL128_VECTOR_SIZE], &t3,
                                           &buffer[(i - HASH_SIZE) * MSHABAL128_VECTOR_SIZE],
                                           (HASH_CAP) >> 6);
             }
 
             // generate final hash
-            mshabal128_avx_openclose_fast(&local_128_fast, &buffer[0], &t1, &final[0],
+            mshabal_hash_fast_avx(&local_128_fast, &buffer[0], &t1, &final[0],
                                       (NONCE_SIZE + 16) >> 6);
 
             // XOR using SIMD
@@ -168,22 +168,12 @@ void noncegen_avx(char *cache, const size_t cache_size, const size_t chunk_offse
 
             for (int i = 0; i < NUM_SCOOPS * 2; i++) {
                 for (int j = 0; j < 32; j += 4) {
+                    for (int k = 0; k < MSHABAL128_VECTOR_SIZE; k += 1) {
                     memcpy(&cache[((i & 1) * (4095 - (i >> 1)) + ((i + 1) & 1) * (i >> 1)) *
                                       SCOOP_SIZE * cache_size +
-                                  (n + 0 + chunk_offset) * SCOOP_SIZE + (i & 1) * 32 + j],
-                           &buffer[(i * 32 + j) * 4 + 0], 4);
-                    memcpy(&cache[((i & 1) * (4095 - (i >> 1)) + ((i + 1) & 1) * (i >> 1)) *
-                                      SCOOP_SIZE * cache_size +
-                                  (n + 1 + chunk_offset) * SCOOP_SIZE + (i & 1) * 32 + j],
-                           &buffer[(i * 32 + j) * 4 + 4], 4);
-                    memcpy(&cache[((i & 1) * (4095 - (i >> 1)) + ((i + 1) & 1) * (i >> 1)) *
-                                      SCOOP_SIZE * cache_size +
-                                  (n + 2 + chunk_offset) * SCOOP_SIZE + (i & 1) * 32 + j],
-                           &buffer[(i * 32 + j) * 4 + 8], 4);
-                    memcpy(&cache[((i & 1) * (4095 - (i >> 1)) + ((i + 1) & 1) * (i >> 1)) *
-                                      SCOOP_SIZE * cache_size +
-                                  (n + 3 + chunk_offset) * SCOOP_SIZE + (i & 1) * 32 + j],
-                           &buffer[(i * 32 + j) * 4 + 12], 4);
+                                  (n + k + chunk_offset) * SCOOP_SIZE + (i & 1) * 32 + j],
+                           &buffer[(i * 32 + j) * MSHABAL128_VECTOR_SIZE + k * 4], 4);
+                    }
                 }
             }
 

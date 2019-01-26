@@ -32,7 +32,7 @@ pub const NONCE_SIZE: u64 = SCOOP_SIZE * NUM_SCOOPS;
 pub struct Plotter {}
 
 extern "C" {
-    pub fn init_shabal_sse() -> ();
+    pub fn init_shabal_sse2() -> ();
     pub fn init_shabal_avx() -> ();
     pub fn init_shabal_avx2() -> ();
     pub fn init_shabal_avx512() -> ();
@@ -291,7 +291,7 @@ impl Plotter {
                 "AVX512F" => init_shabal_avx512(),
                 "AVX2" => init_shabal_avx2(),
                 "AVX" => init_shabal_avx(),
-                "SSE2" => init_shabal_sse(),
+                "SSE2" => init_shabal_sse2(),
                 _ => (),
             }
         }

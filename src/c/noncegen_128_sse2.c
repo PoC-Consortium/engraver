@@ -9,9 +9,9 @@ sph_shabal_context global_32;
 mshabal128_context global_128;
 mshabal128_context_fast global_128_fast;
 
-void init_shabal_sse() {
+void init_shabal_sse2() {
     sph_shabal256_init(&global_32);
-    mshabal128_sse_init(&global_128, 256);
+    mshabal_init_sse2(&global_128, 256);
     global_128_fast.out_size = global_128.out_size;
     for (int i = 0; i < 176; i++) global_128_fast.state[i] = global_128.state[i];
     global_128_fast.Whigh = global_128.Whigh;
@@ -20,10 +20,10 @@ void init_shabal_sse() {
 
 // cache:			cache to save to
 // local_num:		thread number
-// numeric_id:		numeric numeric account id
+// numeric_id:		numeric account id
 // loc_startnonce	nonce to start generation at
 // local_nonces: 	number of nonces to generate
-void noncegen_sse(char *cache, const size_t cache_size, const size_t chunk_offset,
+void noncegen_sse2(char *cache, const size_t cache_size, const size_t chunk_offset,
                    const uint64_t numeric_id, const uint64_t local_startnonce,
                    const uint64_t local_nonces) {
     sph_shabal_context local_32;
@@ -49,11 +49,11 @@ void noncegen_sse(char *cache, const size_t cache_size, const size_t chunk_offse
     // creation could further be optimized, but not much in it as it only runs once per work package
     // creation could also be moved to plotter start
     union {
-        mshabal_u32 words[64];
+        mshabal_u32 words[16 * MSHABAL128_VECTOR_SIZE];
         __m128i data[16];
     } t1, t2, t3;
 
-    for (int j = 0; j < 64 / 2; j += 4) {
+    for (int j = 0; j < 16 * MSHABAL128_VECTOR_SIZE / 2; j += MSHABAL128_VECTOR_SIZE) {
         size_t o = j;
         // t1
         t1.words[j + 0] = *(mshabal_u32 *)(seed + o);
@@ -92,7 +92,7 @@ void noncegen_sse(char *cache, const size_t cache_size, const size_t chunk_offse
             nonce4 = bswap_64((uint64_t)(local_startnonce + n + 3));
 
             // store nonce numbers in relevant termination strings
-            for (int j = 8; j < 16; j += 4) {
+            for (int j = 8; j < 16; j += MSHABAL128_VECTOR_SIZE) {
                 size_t o = j - 8;
                 // t1
                 t1.words[j + 0] = *(mshabal_u32 *)((char *)&nonce1 + o);
@@ -115,7 +115,7 @@ void noncegen_sse(char *cache, const size_t cache_size, const size_t chunk_offse
             memcpy(&local_128_fast, &global_128_fast,
                    sizeof(global_128_fast));  // fast initialize shabal
 
-            mshabal128_sse_openclose_fast(
+            mshabal_hash_fast_sse2(
                 &local_128_fast, NULL, &t1,
                 &buffer[MSHABAL128_VECTOR_SIZE * (NONCE_SIZE - HASH_SIZE)], 16 >> 6);
 
@@ -129,13 +129,13 @@ void noncegen_sse(char *cache, const size_t cache_size, const size_t chunk_offse
                 // remainder
                 if (i % 64 == 0) {
                     // last msg = seed + termination
-                    mshabal128_sse_openclose_fast(&local_128_fast, &buffer[i * MSHABAL128_VECTOR_SIZE],
+                    mshabal_hash_fast_sse2(&local_128_fast, &buffer[i * MSHABAL128_VECTOR_SIZE],
                                               &t1,
                                               &buffer[(i - HASH_SIZE) * MSHABAL128_VECTOR_SIZE],
                                               (NONCE_SIZE + 16 - i) >> 6);
                 } else {
                     // last msg = 256 bit data + seed + termination
-                    mshabal128_sse_openclose_fast(&local_128_fast, &buffer[i * MSHABAL128_VECTOR_SIZE],
+                    mshabal_hash_fast_sse2(&local_128_fast, &buffer[i * MSHABAL128_VECTOR_SIZE],
                                               &t2,
                                               &buffer[(i - HASH_SIZE) * MSHABAL128_VECTOR_SIZE],
                                               (NONCE_SIZE + 16 - i) >> 6);
@@ -144,13 +144,13 @@ void noncegen_sse(char *cache, const size_t cache_size, const size_t chunk_offse
 
             // round 128-8192
             for (size_t i = NONCE_SIZE - HASH_CAP; i > 0; i -= HASH_SIZE) {
-                mshabal128_sse_openclose_fast(&local_128_fast, &buffer[i * MSHABAL128_VECTOR_SIZE], &t3,
+                mshabal_hash_fast_sse2(&local_128_fast, &buffer[i * MSHABAL128_VECTOR_SIZE], &t3,
                                           &buffer[(i - HASH_SIZE) * MSHABAL128_VECTOR_SIZE],
                                           (HASH_CAP) >> 6);
             }
 
             // generate final hash
-            mshabal128_sse_openclose_fast(&local_128_fast, &buffer[0], &t1, &final[0],
+            mshabal_hash_fast_sse2(&local_128_fast, &buffer[0], &t1, &final[0],
                                       (NONCE_SIZE + 16) >> 6);
 
             // XOR using SIMD

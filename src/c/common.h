@@ -57,3 +57,9 @@
 void write_seed(char seed[32], uint64_t numeric_id);
 
 void write_term(char term[32]);
+
+#define SET_BEST_DEADLINE(d, o) \
+    if ((d) < *best_deadline) { \
+        *best_deadline = (d);   \
+        *best_offset = (o);     \
+    }

@@ -11,7 +11,7 @@ mshabal512_context_fast global_512_fast;
 
 void init_shabal_avx512() {
     sph_shabal256_init(&global_32);
-    mshabal512_init(&global_512, 256);
+    mshabal_init_avx512f(&global_512, 256);
     global_512_fast.out_size = global_512.out_size;
     for (int i = 0; i < 704; i++) global_512_fast.state[i] = global_512.state[i];
     global_512_fast.Whigh = global_512.Whigh;
@@ -49,12 +49,12 @@ void noncegen_avx512(char *cache, const size_t cache_size, const size_t chunk_of
     // creation could further be optimized, but not much in it as it only runs once per work package
     // creation could also be moved to plotter start
     union {
-        mshabal_u32 words[64 * MSHABAL512_FACTOR];
+        mshabal_u32 words[16 * MSHABAL512_VECTOR_SIZE];
         __m512i data[16];
     } t1, t2, t3;
 
-    for (int j = 0; j < 64 * MSHABAL512_FACTOR / 2; j += 4 * MSHABAL512_FACTOR) {
-        size_t o = j / MSHABAL512_FACTOR;
+    for (int j = 0; j < 16 * MSHABAL512_VECTOR_SIZE / 2; j += MSHABAL512_VECTOR_SIZE) {
+        size_t o = j / 4;
         // t1
         t1.words[j + 0] = *(mshabal_u32 *)(seed + o);
         t1.words[j + 1] = *(mshabal_u32 *)(seed + o);
@@ -165,8 +165,8 @@ void noncegen_avx512(char *cache, const size_t cache_size, const size_t chunk_of
             nonce16 = bswap_64((uint64_t)(local_startnonce + n + 15));
 
             // store nonce numbers in relevant termination strings
-            for (int j = 32; j < 64 * MSHABAL512_FACTOR / 4; j += 4 * MSHABAL512_FACTOR) {
-                size_t o = j / MSHABAL512_FACTOR - 8;
+            for (int j = 32; j < 16 * MSHABAL512_VECTOR_SIZE / 4; j += MSHABAL512_VECTOR_SIZE) {
+                size_t o = j / 4 - 8;
                 // t1
                 t1.words[j + 0] = *(mshabal_u32 *)((char *)&nonce1 + o);
                 t1.words[j + 1] = *(mshabal_u32 *)((char *)&nonce2 + o);
@@ -214,7 +214,7 @@ void noncegen_avx512(char *cache, const size_t cache_size, const size_t chunk_of
             memcpy(&local_512_fast, &global_512_fast,
                    sizeof(global_512_fast));  // fast initialize shabal                 
             
-            mshabal512_openclose_fast(
+             mshabal_hash_fast_avx512f(
                 &local_512_fast, NULL, &t1,
                 &buffer[MSHABAL512_VECTOR_SIZE * (NONCE_SIZE - HASH_SIZE)], 16 >> 6);
 
@@ -228,13 +228,13 @@ void noncegen_avx512(char *cache, const size_t cache_size, const size_t chunk_of
                 // remainder
                 if (i % 64 == 0) {
                     // last msg = seed + termination
-                    mshabal512_openclose_fast(&local_512_fast, &buffer[i * MSHABAL512_VECTOR_SIZE],
+                     mshabal_hash_fast_avx512f(&local_512_fast, &buffer[i * MSHABAL512_VECTOR_SIZE],
                                               &t1,
                                               &buffer[(i - HASH_SIZE) * MSHABAL512_VECTOR_SIZE],
                                               (NONCE_SIZE + 16 - i) >> 6);
                 } else {
                     // last msg = 256 bit data + seed + termination
-                    mshabal512_openclose_fast(&local_512_fast, &buffer[i * MSHABAL512_VECTOR_SIZE],
+                     mshabal_hash_fast_avx512f(&local_512_fast, &buffer[i * MSHABAL512_VECTOR_SIZE],
                                               &t2,
                                               &buffer[(i - HASH_SIZE) * MSHABAL512_VECTOR_SIZE],
                                               (NONCE_SIZE + 16 - i) >> 6);
@@ -243,13 +243,13 @@ void noncegen_avx512(char *cache, const size_t cache_size, const size_t chunk_of
 
             // round 128-8192
             for (size_t i = NONCE_SIZE - HASH_CAP; i > 0; i -= HASH_SIZE) {
-                mshabal512_openclose_fast(&local_512_fast, &buffer[i * MSHABAL512_VECTOR_SIZE], &t3,
+                 mshabal_hash_fast_avx512f(&local_512_fast, &buffer[i * MSHABAL512_VECTOR_SIZE], &t3,
                                           &buffer[(i - HASH_SIZE) * MSHABAL512_VECTOR_SIZE],
                                           (HASH_CAP) >> 6);
             }
            
             // generate final hash
-            mshabal512_openclose_fast(&local_512_fast, &buffer[0], &t1, &final[0],
+             mshabal_hash_fast_avx512f(&local_512_fast, &buffer[0], &t1, &final[0],
                                       (NONCE_SIZE + 16) >> 6);
             
             // XOR using SIMD
@@ -263,7 +263,6 @@ void noncegen_avx512(char *cache, const size_t cache_size, const size_t chunk_of
                     _mm512_xor_si512(_mm512_loadu_si512((__m512i *)buffer + j), F[j % 8]));
              
             // todo: fork SIMD aligned plot file here
-
             // simd shabal words unpack + POC Shuffle + scatter nonces into optimised cache
             for (int i = 0; i < NUM_SCOOPS * 2; i++) {
                 for (int j = 0; j < 32; j += 4) {
