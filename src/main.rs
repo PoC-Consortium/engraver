@@ -127,7 +127,7 @@ fn main() {
                     Arg::with_name("gpu")
                         .short("g")
                         .long("gpu")
-                        .value_name("platform_id:device_id")
+                        .value_name("platform_id:device_id:cores")
                         .help("GPU(s) you want to use for plotting (optional)")
                         .multiple(true)
                         .takes_value(true),
