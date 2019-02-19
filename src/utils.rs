@@ -120,8 +120,6 @@ cfg_if! {
         }
 
     } else {
-        extern crate winapi;
-        extern crate core;
         use std::ffi::CString;
         use std::ptr::null_mut;
         use std::iter::once;
@@ -129,14 +127,14 @@ cfg_if! {
         use std::os::windows::io::AsRawHandle;
         use std::os::windows::ffi::OsStrExt;
         use std::os::windows::fs::OpenOptionsExt;
-        use utils::core::mem::size_of_val;
-        use utils::winapi::um::errhandlingapi::GetLastError;
-        use utils::winapi::um::fileapi::{GetDiskFreeSpaceA,SetFileValidData};
-        use utils::winapi::um::handleapi::CloseHandle;
-        use utils::winapi::um::processthreadsapi::{SetThreadIdealProcessor,GetCurrentThread,OpenProcessToken,GetCurrentProcess,SetPriorityClass};
-        use utils::winapi::um::securitybaseapi::AdjustTokenPrivileges;
-        use utils::winapi::um::winbase::LookupPrivilegeValueW;
-        use utils::winapi::um::winnt::{LUID,TOKEN_ADJUST_PRIVILEGES,TOKEN_PRIVILEGES,LUID_AND_ATTRIBUTES,SE_PRIVILEGE_ENABLED,SE_MANAGE_VOLUME_NAME};
+        use core::mem::size_of_val;
+        use winapi::um::errhandlingapi::GetLastError;
+        use winapi::um::fileapi::{GetDiskFreeSpaceA,SetFileValidData};
+        use winapi::um::handleapi::CloseHandle;
+        use winapi::um::processthreadsapi::{SetThreadIdealProcessor,GetCurrentThread,OpenProcessToken,GetCurrentProcess,SetPriorityClass};
+        use winapi::um::securitybaseapi::AdjustTokenPrivileges;
+        use winapi::um::winbase::LookupPrivilegeValueW;
+        use winapi::um::winnt::{LUID,TOKEN_ADJUST_PRIVILEGES,TOKEN_PRIVILEGES,LUID_AND_ATTRIBUTES,SE_PRIVILEGE_ENABLED,SE_MANAGE_VOLUME_NAME};
 
         const FILE_FLAG_NO_BUFFERING: u32 = 0x2000_0000;
         const FILE_FLAG_WRITE_THROUGH: u32 = 0x8000_0000;

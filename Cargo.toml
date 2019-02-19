@@ -10,9 +10,11 @@ repository = "https://github.com/PoC-Consortium/engraver"
 documentation = "https://github.com/PoC-Consortium/engraver"
 keywords = ["poc2", "plotter", "rust","cryptocurrency"]
 readme = "README.md"
+edition = "2018"
 
 [features]
 opencl = ["ocl-core"]
+simd=[]
 
 [dependencies]
 crossbeam-channel = "0.3.6"

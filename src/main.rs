@@ -2,12 +2,6 @@
 extern crate clap;
 #[macro_use]
 extern crate cfg_if;
-extern crate core_affinity;
-extern crate crossbeam_channel as chan;
-extern crate libc;
-extern crate pbr;
-extern crate stopwatch;
-extern crate sys_info;
 
 mod cpu_hasher;
 #[cfg(feature = "opencl")]
@@ -19,13 +13,13 @@ mod scheduler;
 mod utils;
 mod writer;
 
+use crate::plotter::{Plotter, PlotterTask};
+use crate::utils::set_low_prio;
 use clap::AppSettings::{ArgRequiredElseHelp, DeriveDisplayOrder, VersionlessSubcommands};
 #[cfg(feature = "opencl")]
 use clap::ArgGroup;
 use clap::{App, Arg};
-use plotter::{Plotter, PlotterTask};
 use std::cmp::min;
-use utils::set_low_prio;
 
 fn main() {
     let arg = App::new("Engraver")

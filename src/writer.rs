@@ -1,13 +1,10 @@
-extern crate pbr;
-
-use chan;
-use plotter::{Buffer, PlotterTask};
-use plotter::{NONCE_SIZE, SCOOP_SIZE};
+use crate::plotter::{Buffer, PlotterTask, NONCE_SIZE, SCOOP_SIZE};
+use crate::utils::{open, open_r, open_using_direct_io};
+use crossbeam_channel::{Receiver, Sender};
 use std::cmp::min;
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::Path;
 use std::sync::Arc;
-use utils::{open, open_r, open_using_direct_io};
 
 const TASK_SIZE: u64 = 16384;
 
@@ -15,13 +12,13 @@ pub fn create_writer_thread(
     task: Arc<PlotterTask>,
     mut nonces_written: u64,
     mut pb: Option<pbr::ProgressBar<pbr::Pipe>>,
-    rx_buffers_to_writer: chan::Receiver<Buffer>,
-    tx_empty_buffers: chan::Sender<Buffer>,
+    rx_buffers_to_writer: Receiver<Buffer>,
+    tx_empty_buffers: Sender<Buffer>,
 ) -> impl FnOnce() {
     move || {
         for buffer in rx_buffers_to_writer {
             let mut_bs = &buffer.get_buffer();
-            let mut bs = mut_bs.lock().unwrap();
+            let bs = mut_bs.lock().unwrap();
             let buffer_size = (*bs).len() as u64;
             let nonces_to_write = min(buffer_size / NONCE_SIZE, task.nonces - nonces_written);
 

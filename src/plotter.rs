@@ -1,29 +1,22 @@
-extern crate humanize_rs;
-extern crate pbr;
-extern crate raw_cpuid;
-extern crate rayon;
-extern crate sys_info;
+use humanize_rs::bytes::Bytes;
+use pbr::{MultiBar, Units};
+use raw_cpuid::CpuId;
 
-use self::humanize_rs::bytes::Bytes;
-use self::pbr::{MultiBar, Units};
-use self::raw_cpuid::CpuId;
-use chan;
-use core_affinity;
 #[cfg(feature = "opencl")]
-use ocl::gpu_get_info;
-use scheduler::create_scheduler_thread;
+use crate::ocl::gpu_get_info;
+use crate::scheduler::create_scheduler_thread;
+#[cfg(windows)]
+use crate::utils::set_thread_ideal_processor;
+use crate::utils::{free_disk_space, get_sector_size, preallocate};
+use crate::writer::{create_writer_thread, read_resume_info, write_resume_info};
+use core_affinity;
+use crossbeam_channel::bounded;
 use std::cmp::{max, min};
 use std::path::Path;
 use std::process;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use stopwatch::Stopwatch;
-use utils::free_disk_space;
-use utils::get_sector_size;
-use utils::preallocate;
-#[cfg(windows)]
-use utils::set_thread_ideal_processor;
-use writer::{create_writer_thread, read_resume_info, write_resume_info};
 
 pub const SCOOP_SIZE: u64 = 64;
 pub const NUM_SCOOPS: u64 = 4096;
@@ -250,8 +243,8 @@ impl Plotter {
         // determine buffer size
         let num_buffer = if task.async_io { 2 } else { 1 };
         let buffer_size = mem / num_buffer;
-        let (tx_empty_buffers, rx_empty_buffers) = chan::bounded(num_buffer as usize);
-        let (tx_full_buffers, rx_full_buffers) = chan::bounded(num_buffer as usize);
+        let (tx_empty_buffers, rx_empty_buffers) = bounded(num_buffer as usize);
+        let (tx_full_buffers, rx_full_buffers) = bounded(num_buffer as usize);
 
         for _ in 0..num_buffer {
             let buffer = Buffer::new(buffer_size as usize);

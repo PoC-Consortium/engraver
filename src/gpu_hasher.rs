@@ -1,5 +1,5 @@
-use chan::Receiver;
-use ocl::{gpu_hash, gpu_hash_and_transfer_to_host, gpu_transfer_to_host, GpuContext};
+use crate::ocl::{gpu_hash, gpu_hash_and_transfer_to_host, gpu_transfer_to_host, GpuContext};
+use crossbeam_channel::Receiver;
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 

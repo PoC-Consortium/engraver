@@ -1,15 +1,11 @@
-extern crate pbr;
-extern crate rayon;
-
-use chan;
-use cpu_hasher::{hash_cpu, CpuTask, SafeCVoid};
+use crate::cpu_hasher::{hash_cpu, CpuTask, SafeCVoid};
 #[cfg(feature = "opencl")]
-use gpu_hasher::{create_gpu_hasher_thread, GpuTask, SafePointer};
+use crate::gpu_hasher::{create_gpu_hasher_thread, GpuTask, SafePointer};
+#[cfg(feature = "opencl")]
+use crate::ocl::gpu_init;
+use crate::plotter::{Buffer, PlotterTask, NONCE_SIZE};
+use crossbeam_channel::{unbounded, Receiver, Sender};
 use libc::{c_void, size_t};
-#[cfg(feature = "opencl")]
-use ocl::gpu_init;
-use plotter::NONCE_SIZE;
-use plotter::{Buffer, PlotterTask};
 use std::cmp::min;
 use std::sync::mpsc::channel;
 use std::sync::Arc;
@@ -23,8 +19,8 @@ pub fn create_scheduler_thread(
     thread_pool: rayon::ThreadPool,
     mut nonces_hashed: u64,
     mut pb: Option<pbr::ProgressBar<pbr::Pipe>>,
-    rx_empty_buffers: chan::Receiver<Buffer>,
-    tx_buffers_to_writer: chan::Sender<Buffer>,
+    rx_empty_buffers: Receiver<Buffer>,
+    tx_buffers_to_writer: Sender<Buffer>,
     simd_ext: String,
 ) -> impl FnOnce() {
     move || {
@@ -55,7 +51,7 @@ pub fn create_scheduler_thread(
 
         #[cfg(feature = "opencl")]
         for (i, gpu) in gpus.iter().enumerate() {
-            gpu_channels.push(chan::unbounded());
+            gpu_channels.push(unbounded());
             gpu_threads.push(thread::spawn({
                 create_gpu_hasher_thread(
                     (i + 1) as u8,
@@ -79,7 +75,7 @@ pub fn create_scheduler_thread(
             #[cfg(feature = "opencl")]
             for (i, gpu) in gpus.iter().enumerate() {
                 // schedule next gpu task
-                let mut gpu = gpu.lock().unwrap();
+                let gpu = gpu.lock().unwrap();
                 let task_size = min(gpu.worksize as u64, nonces_to_hash - requested);
                 if task_size > 0 {
                     gpu_channels[i]
@@ -102,7 +98,7 @@ pub fn create_scheduler_thread(
 
             for _ in 0..task.cpu_threads {
                 let task_size = min(CPU_TASK_SIZE, nonces_to_hash - requested);
-              if task_size > 0 {
+                if task_size > 0 {
                     let task = hash_cpu(
                         tx.clone(),
                         CpuTask {
@@ -133,30 +129,30 @@ pub fn create_scheduler_thread(
                                 // schedule next cpu task
                                 let task_size = min(CPU_TASK_SIZE, nonces_to_hash - requested);
                                 if task_size > 0 {
-                                        let task = hash_cpu(
-                                            tx.clone(),
-                                            CpuTask {
-                                                cache: SafeCVoid {
-                                                    ptr: bs.as_ptr() as *mut c_void,
-                                                },
-                                                cache_size: (buffer_size / NONCE_SIZE) as usize,
-                                                chunk_offset: requested as size_t,
-                                                numeric_id: task.numeric_id,
-                                                local_startnonce: task.start_nonce
-                                                    + nonces_hashed
-                                                    + requested,
-                                                local_nonces: task_size,
+                                    let task = hash_cpu(
+                                        tx.clone(),
+                                        CpuTask {
+                                            cache: SafeCVoid {
+                                                ptr: bs.as_ptr() as *mut c_void,
                                             },
-                                            simd_ext.clone(),
-                                        );
-                                        thread_pool.spawn(task);
-                                    }
+                                            cache_size: (buffer_size / NONCE_SIZE) as usize,
+                                            chunk_offset: requested as size_t,
+                                            numeric_id: task.numeric_id,
+                                            local_startnonce: task.start_nonce
+                                                + nonces_hashed
+                                                + requested,
+                                            local_nonces: task_size,
+                                        },
+                                        simd_ext.clone(),
+                                    );
+                                    thread_pool.spawn(task);
+                                }
                                 task_size
                             }
                             _ => {
                                 // schedule next gpu task
                                 #[cfg(feature = "opencl")]
-                                let mut gpu = gpus[(msg.0 - 1) as usize].lock().unwrap();
+                                let gpu = gpus[(msg.0 - 1) as usize].lock().unwrap();
                                 #[cfg(feature = "opencl")]
                                 let task_size =
                                     min(gpu.worksize as u64, nonces_to_hash - requested);

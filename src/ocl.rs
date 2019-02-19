@@ -1,12 +1,10 @@
-extern crate ocl_core as core;
-extern crate rayon;
-
 use self::core::{
     ArgVal, ContextProperties, DeviceInfo, Event, KernelWorkGroupInfo, PlatformInfo, Status,
 };
-use gpu_hasher::GpuTask;
-use ocl::rayon::prelude::*;
-use plotter::{NONCE_SIZE, NUM_SCOOPS, SCOOP_SIZE};
+use crate::gpu_hasher::GpuTask;
+use crate::plotter::{NONCE_SIZE, NUM_SCOOPS, SCOOP_SIZE};
+use ocl_core as core;
+use rayon::prelude::*;
 use std::cmp::min;
 use std::ffi::CString;
 use std::process;

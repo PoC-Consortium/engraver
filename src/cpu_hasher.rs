@@ -122,7 +122,7 @@ mod test {
     use self::crypto::digest::Digest;
     use self::crypto::sha2::Sha256;
     use super::*;
-    use plotter;
+    use crate::plotter;
 
     #[test]
     fn test_noncegen() {
