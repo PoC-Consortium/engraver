@@ -1,4 +1,3 @@
-extern crate fs2;
 use std::fs::{File, OpenOptions};
 use std::io;
 use std::path::Path;
@@ -9,9 +8,9 @@ cfg_if! {
         extern crate thread_priority;
         use std::process::Command;
         use std::os::unix::fs::OpenOptionsExt;
-        use utils::fs2::FileExt;
+        use fs2::FileExt;
         #[cfg(linux)]
-        use self::thread_priority::*;
+        use thread_priority::*;
 
         const O_DIRECT: i32 = 0o0_040_000;
 
