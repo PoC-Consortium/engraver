@@ -761,7 +761,7 @@
             this.MinimumSize = new System.Drawing.Size(640, 510);
             this.Name = "EngraverForm";
             this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
-            this.Text = "Engraver GUI v.2.2.1";
+            this.Text = "Engraver GUI v.2.4.0";
             this.FormClosing += new System.Windows.Forms.FormClosingEventHandler(this.EngraverForm_FormClosing);
             this.Load += new System.EventHandler(this.EngraverForm_Load);
             this.statusStrip.ResumeLayout(false);

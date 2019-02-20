@@ -792,9 +792,9 @@ namespace EngraverGui
                 }
                 else
                 {
-                    if (i > (uint)devices.Rows[e.RowIndex].Cells[e.ColumnIndex - 1].Value)
+                    if (i > 2*(uint)devices.Rows[e.RowIndex].Cells[e.ColumnIndex - 1].Value)
                     {
-                        MessageBox.Show("Please enter a value between 0 and " + devices.Rows[e.RowIndex].Cells[e.ColumnIndex - 1].Value.ToString(), "Invalid Input", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        MessageBox.Show("Please enter a value between 0 and " + (2 * (uint)devices.Rows[e.RowIndex].Cells[e.ColumnIndex - 1].Value).ToString(), "Invalid Input", MessageBoxButtons.OK, MessageBoxIcon.Error);
                         e.Cancel = true;
                     }
                 }
