@@ -1,6 +1,6 @@
 <img align="right" src="https://i.imgur.com/PJsPNSG.png" height="200">
  
- [![Build Status](https://travis-ci.org/PoC-Consortium/engraver.svg?branch=master)](https://travis-ci.org/PoC-Consortium/engraver) [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+ [![Build Status](https://travis-ci.org/PoC-Consortium/engraver.svg?branch=master)](https://travis-ci.org/PoC-Consortium/engraver) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 # Engraver - PoC2 plotter in Rust
 
