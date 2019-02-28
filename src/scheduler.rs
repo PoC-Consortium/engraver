@@ -1,12 +1,12 @@
-use crate::cpu_hasher::{hash_cpu, CpuTask, SafeCVoid};
+use crate::cpu_hasher::{hash_cpu, CpuTask, SafePointer};
 #[cfg(feature = "opencl")]
-use crate::gpu_hasher::{create_gpu_hasher_thread, GpuTask, SafePointer};
+use crate::gpu_hasher::{create_gpu_hasher_thread, GpuTask};
 #[cfg(feature = "opencl")]
 use crate::ocl::gpu_init;
 use crate::plotter::{Buffer, PlotterTask, NONCE_SIZE};
-use crossbeam_channel::{Receiver, Sender};
 #[cfg(feature = "opencl")]
 use crossbeam_channel::unbounded;
+use crossbeam_channel::{Receiver, Sender};
 use libc::{c_void, size_t};
 use std::cmp::min;
 use std::sync::mpsc::channel;
@@ -104,8 +104,8 @@ pub fn create_scheduler_thread(
                     let task = hash_cpu(
                         tx.clone(),
                         CpuTask {
-                            cache: SafeCVoid {
-                                ptr: bs.as_mut_ptr() as *mut c_void,
+                            cache: SafePointer {
+                                ptr: bs.as_mut_ptr(),
                             },
                             cache_size: (buffer_size / NONCE_SIZE) as usize,
                             chunk_offset: requested as usize,
@@ -134,8 +134,8 @@ pub fn create_scheduler_thread(
                                     let task = hash_cpu(
                                         tx.clone(),
                                         CpuTask {
-                                            cache: SafeCVoid {
-                                                ptr: bs.as_ptr() as *mut c_void,
+                                            cache: SafePointer {
+                                                ptr: bs.as_mut_ptr(),
                                             },
                                             cache_size: (buffer_size / NONCE_SIZE) as usize,
                                             chunk_offset: requested as size_t,
