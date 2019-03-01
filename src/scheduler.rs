@@ -7,7 +7,6 @@ use crate::plotter::{Buffer, PlotterTask, NONCE_SIZE};
 #[cfg(feature = "opencl")]
 use crossbeam_channel::unbounded;
 use crossbeam_channel::{Receiver, Sender};
-use libc::{c_void, size_t};
 use std::cmp::min;
 use std::sync::mpsc::channel;
 use std::sync::Arc;
@@ -138,7 +137,7 @@ pub fn create_scheduler_thread(
                                                 ptr: bs.as_mut_ptr(),
                                             },
                                             cache_size: (buffer_size / NONCE_SIZE) as usize,
-                                            chunk_offset: requested as size_t,
+                                            chunk_offset: requested as usize,
                                             numeric_id: task.numeric_id,
                                             local_startnonce: task.start_nonce
                                                 + nonces_hashed

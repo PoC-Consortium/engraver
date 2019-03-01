@@ -8,14 +8,6 @@ const SCOOP_SIZE: usize = 64;
 const NONCE_SIZE: usize = (NUM_SCOOPS * SCOOP_SIZE);
 
 extern "C" {
-    pub fn noncegen(
-        cache: *mut c_void,
-        cache_size: size_t,
-        chunk_offset: size_t,
-        numeric_ID: uint64_t,
-        local_startnonce: uint64_t,
-        local_nonces: uint64_t,
-    );
     pub fn noncegen_sse2(
         cache: *mut c_void,
         cache_size: size_t,
@@ -116,16 +108,6 @@ pub fn hash_cpu(
                         hasher_task.local_startnonce,
                         hasher_task.local_nonces,
                     )
-
-                    /*
-                    noncegen(
-                    hasher_task.cache.ptr as *mut c_void,
-                    hasher_task.cache_size,
-                    hasher_task.chunk_offset,
-                    hasher_task.numeric_id,
-                    hasher_task.local_startnonce,
-                    hasher_task.local_nonces,
-                    )*/
                 }
             }
         }

@@ -19,7 +19,6 @@ fn main() {
 
     config
         .file("src/c/sph_shabal.c")
-        .file("src/c/noncegen_32.c")
         .file("src/c/common.c")
         .compile("shabal");
 

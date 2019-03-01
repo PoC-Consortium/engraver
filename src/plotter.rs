@@ -80,8 +80,6 @@ impl Plotter {
         let memory = sys_info::mem_info().unwrap();
 
         let simd_ext = detect_simd();
-        // debug: testing non-SIMD routine
-        let simd_ext = String::from("");
 
         if !task.quiet {
             println!("Engraver {} - PoC2 Plotter\n", crate_version!());

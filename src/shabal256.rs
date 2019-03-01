@@ -208,7 +208,6 @@ fn perm(a: &mut [u32; 12], b: &mut [u32; 16], c: &[u32; 16], data: &[u32]) {
 
 #[inline(always)]
 fn swap_bc(b: &mut [u32; 16], c: &mut [u32; 16]) {
-    //b.swap_with_slice(c); checks bounds, but less code :)
     std::mem::swap(b, c);
 }
 
