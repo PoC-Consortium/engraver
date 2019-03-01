@@ -1,15 +1,13 @@
+use crate::poc_hashing::noncegen_rust;
 use libc::{c_void, size_t, uint64_t};
+use std::slice::from_raw_parts_mut;
 use std::sync::mpsc::Sender;
 
+const NUM_SCOOPS: usize = 4096;
+const SCOOP_SIZE: usize = 64;
+const NONCE_SIZE: usize = (NUM_SCOOPS * SCOOP_SIZE);
+
 extern "C" {
-    pub fn noncegen(
-        cache: *mut c_void,
-        cache_size: size_t,
-        chunk_offset: size_t,
-        numeric_ID: uint64_t,
-        local_startnonce: uint64_t,
-        local_nonces: uint64_t,
-    );
     pub fn noncegen_sse2(
         cache: *mut c_void,
         cache_size: size_t,
@@ -43,18 +41,19 @@ extern "C" {
         local_nonces: uint64_t,
     );
 }
-pub struct SafeCVoid {
-    pub ptr: *mut c_void,
+pub struct SafePointer {
+    pub ptr: *mut u8,
 }
-unsafe impl Send for SafeCVoid {}
+unsafe impl Send for SafePointer {}
+unsafe impl Sync for SafePointer {}
 
 pub struct CpuTask {
-    pub cache: SafeCVoid,
-    pub cache_size: size_t,
-    pub chunk_offset: size_t,
-    pub numeric_id: uint64_t,
-    pub local_startnonce: uint64_t,
-    pub local_nonces: uint64_t,
+    pub cache: SafePointer,
+    pub cache_size: usize,
+    pub chunk_offset: usize,
+    pub numeric_id: u64,
+    pub local_startnonce: u64,
+    pub local_nonces: u64,
 }
 
 pub fn hash_cpu(
@@ -66,7 +65,7 @@ pub fn hash_cpu(
         unsafe {
             match &*simd_ext {
                 "AVX512F" => noncegen_avx512(
-                    hasher_task.cache.ptr,
+                    hasher_task.cache.ptr as *mut c_void,
                     hasher_task.cache_size,
                     hasher_task.chunk_offset,
                     hasher_task.numeric_id,
@@ -74,7 +73,7 @@ pub fn hash_cpu(
                     hasher_task.local_nonces,
                 ),
                 "AVX2" => noncegen_avx2(
-                    hasher_task.cache.ptr,
+                    hasher_task.cache.ptr as *mut c_void,
                     hasher_task.cache_size,
                     hasher_task.chunk_offset,
                     hasher_task.numeric_id,
@@ -82,7 +81,7 @@ pub fn hash_cpu(
                     hasher_task.local_nonces,
                 ),
                 "AVX" => noncegen_avx(
-                    hasher_task.cache.ptr,
+                    hasher_task.cache.ptr as *mut c_void,
                     hasher_task.cache_size,
                     hasher_task.chunk_offset,
                     hasher_task.numeric_id,
@@ -90,21 +89,26 @@ pub fn hash_cpu(
                     hasher_task.local_nonces,
                 ),
                 "SSE2" => noncegen_sse2(
-                    hasher_task.cache.ptr,
+                    hasher_task.cache.ptr as *mut c_void,
                     hasher_task.cache_size,
                     hasher_task.chunk_offset,
                     hasher_task.numeric_id,
                     hasher_task.local_startnonce,
                     hasher_task.local_nonces,
                 ),
-                _ => noncegen(
-                    hasher_task.cache.ptr,
-                    hasher_task.cache_size,
-                    hasher_task.chunk_offset,
-                    hasher_task.numeric_id,
-                    hasher_task.local_startnonce,
-                    hasher_task.local_nonces,
-                ),
+                _ => {
+                    let data = from_raw_parts_mut(
+                        hasher_task.cache.ptr,
+                        hasher_task.cache_size * NONCE_SIZE,
+                    );
+                    noncegen_rust(
+                        data,
+                        hasher_task.chunk_offset,
+                        hasher_task.numeric_id,
+                        hasher_task.local_startnonce,
+                        hasher_task.local_nonces,
+                    )
+                }
             }
         }
         // report hashing done

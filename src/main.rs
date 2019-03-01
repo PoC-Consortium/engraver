@@ -9,7 +9,9 @@ mod gpu_hasher;
 #[cfg(feature = "opencl")]
 mod ocl;
 mod plotter;
+mod poc_hashing;
 mod scheduler;
+mod shabal256;
 mod utils;
 mod writer;
 

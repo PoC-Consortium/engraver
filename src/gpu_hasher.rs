@@ -1,13 +1,8 @@
+use crate::cpu_hasher::SafePointer;
 use crate::ocl::{gpu_hash, gpu_hash_and_transfer_to_host, gpu_transfer_to_host, GpuContext};
 use crossbeam_channel::Receiver;
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
-
-pub struct SafePointer {
-    pub ptr: *mut u8,
-}
-unsafe impl Send for SafePointer {}
-unsafe impl Sync for SafePointer {}
 
 pub struct GpuTask {
     pub cache: SafePointer,
