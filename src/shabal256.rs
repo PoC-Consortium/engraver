@@ -33,8 +33,8 @@ pub fn shabal256_fast(data: &[u8], term: &[u32; 16]) -> [u8; 32] {
         input_block_sub(&mut c, &data[ptr..]);
         swap_bc(&mut b, &mut c);
         incr_w(&mut w_low, &mut w_high);
-        ptr += 16;
-        num -= 1;
+        ptr = ptr.wrapping_add(16);
+        num = num.wrapping_sub(1);
     }
     input_block_add(&mut b, term);
     xor_w(&mut a, w_low, w_high);
@@ -49,42 +49,16 @@ pub fn shabal256_fast(data: &[u8], term: &[u32; 16]) -> [u8; 32] {
 
 #[inline(always)]
 fn input_block_add(b: &mut [u32; 16], data: &[u32]) {
-    b[0] = b[0].wrapping_add(data[0]);
-    b[1] = b[1].wrapping_add(data[1]);
-    b[2] = b[2].wrapping_add(data[2]);
-    b[3] = b[3].wrapping_add(data[3]);
-    b[4] = b[4].wrapping_add(data[4]);
-    b[5] = b[5].wrapping_add(data[5]);
-    b[6] = b[6].wrapping_add(data[6]);
-    b[7] = b[7].wrapping_add(data[7]);
-    b[8] = b[8].wrapping_add(data[8]);
-    b[9] = b[9].wrapping_add(data[9]);
-    b[10] = b[10].wrapping_add(data[10]);
-    b[11] = b[11].wrapping_add(data[11]);
-    b[12] = b[12].wrapping_add(data[12]);
-    b[13] = b[13].wrapping_add(data[13]);
-    b[14] = b[14].wrapping_add(data[14]);
-    b[15] = b[15].wrapping_add(data[15]);
+    for (element, data) in b.iter_mut().zip(data.iter()) {
+        *element = element.wrapping_add(*data);
+    }
 }
 
 #[inline(always)]
 fn input_block_sub(c: &mut [u32; 16], data: &[u32]) {
-    c[0] = c[0].wrapping_sub(data[0]);
-    c[1] = c[1].wrapping_sub(data[1]);
-    c[2] = c[2].wrapping_sub(data[2]);
-    c[3] = c[3].wrapping_sub(data[3]);
-    c[4] = c[4].wrapping_sub(data[4]);
-    c[5] = c[5].wrapping_sub(data[5]);
-    c[6] = c[6].wrapping_sub(data[6]);
-    c[7] = c[7].wrapping_sub(data[7]);
-    c[8] = c[8].wrapping_sub(data[8]);
-    c[9] = c[9].wrapping_sub(data[9]);
-    c[10] = c[10].wrapping_sub(data[10]);
-    c[11] = c[11].wrapping_sub(data[11]);
-    c[12] = c[12].wrapping_sub(data[12]);
-    c[13] = c[13].wrapping_sub(data[13]);
-    c[14] = c[14].wrapping_sub(data[14]);
-    c[15] = c[15].wrapping_sub(data[15]);
+    for (element, data) in c.iter_mut().zip(data.iter()) {
+        *element = element.wrapping_sub(*data);
+    }
 }
 
 #[inline(always)]
@@ -95,22 +69,9 @@ fn xor_w(a: &mut [u32; 12], w_low: u32, w_high: u32) {
 
 #[inline(always)]
 fn apply_p(a: &mut [u32; 12], b: &mut [u32; 16], c: &[u32; 16], data: &[u32]) {
-    b[0] = b[0].wrapping_shl(17) | b[0].wrapping_shr(15);
-    b[1] = b[1].wrapping_shl(17) | b[1].wrapping_shr(15);
-    b[2] = b[2].wrapping_shl(17) | b[2].wrapping_shr(15);
-    b[3] = b[3].wrapping_shl(17) | b[3].wrapping_shr(15);
-    b[4] = b[4].wrapping_shl(17) | b[4].wrapping_shr(15);
-    b[5] = b[5].wrapping_shl(17) | b[5].wrapping_shr(15);
-    b[6] = b[6].wrapping_shl(17) | b[6].wrapping_shr(15);
-    b[7] = b[7].wrapping_shl(17) | b[7].wrapping_shr(15);
-    b[8] = b[8].wrapping_shl(17) | b[8].wrapping_shr(15);
-    b[9] = b[9].wrapping_shl(17) | b[9].wrapping_shr(15);
-    b[10] = b[10].wrapping_shl(17) | b[10].wrapping_shr(15);
-    b[11] = b[11].wrapping_shl(17) | b[11].wrapping_shr(15);
-    b[12] = b[12].wrapping_shl(17) | b[12].wrapping_shr(15);
-    b[13] = b[13].wrapping_shl(17) | b[13].wrapping_shr(15);
-    b[14] = b[14].wrapping_shl(17) | b[14].wrapping_shr(15);
-    b[15] = b[15].wrapping_shl(17) | b[15].wrapping_shr(15);
+    for element in b.iter_mut() {
+        *element = element.wrapping_shl(17) | element.wrapping_shr(15);
+    }
     perm(a, b, c, data);
     a[0] = a[0]
         .wrapping_add(c[11])
@@ -175,71 +136,80 @@ fn perm_elt(
     xc: u32,
     xm: u32,
 ) {
-    a[xa0] = (a[xa0]
-        ^ ((a[xa1].wrapping_shl(15u32) | a[xa1].wrapping_shr(17u32)).wrapping_mul(5u32))
-        ^ xc)
-        .wrapping_mul(3u32)
-        ^ b[xb1]
-        ^ (b[xb2] & !b[xb3])
-        ^ xm;
-    b[xb0] = !((b[xb0].wrapping_shl(1) | b[xb0].wrapping_shr(31)) ^ a[xa0]);
+    unsafe {
+        *a.get_unchecked_mut(xa0) = (a.get_unchecked(xa0)
+            ^ ((a.get_unchecked(xa1).wrapping_shl(15u32)
+                | a.get_unchecked(xa1).wrapping_shr(17u32))
+            .wrapping_mul(5u32))
+            ^ xc)
+            .wrapping_mul(3u32)
+            ^ b.get_unchecked(xb1)
+            ^ (b.get_unchecked(xb2) & !b.get_unchecked(xb3))
+            ^ xm;
+        *b.get_unchecked_mut(xb0) = !((b.get_unchecked(xb0).wrapping_shl(1)
+            | b.get_unchecked(xb0).wrapping_shr(31))
+            ^ a.get_unchecked(xa0));
+    }
 }
 
 #[inline(always)]
 fn perm(a: &mut [u32; 12], b: &mut [u32; 16], c: &[u32; 16], data: &[u32]) {
-    perm_elt(a, b, 0, 11, 0, 13, 9, 6, c[8], data[0]);
-    perm_elt(a, b, 1, 0, 1, 14, 10, 7, c[7], data[1]);
-    perm_elt(a, b, 2, 1, 2, 15, 11, 8, c[6], data[2]);
-    perm_elt(a, b, 3, 2, 3, 0, 12, 9, c[5], data[3]);
-    perm_elt(a, b, 4, 3, 4, 1, 13, 10, c[4], data[4]);
-    perm_elt(a, b, 5, 4, 5, 2, 14, 11, c[3], data[5]);
-    perm_elt(a, b, 6, 5, 6, 3, 15, 12, c[2], data[6]);
-    perm_elt(a, b, 7, 6, 7, 4, 0, 13, c[1], data[7]);
-    perm_elt(a, b, 8, 7, 8, 5, 1, 14, c[0], data[8]);
-    perm_elt(a, b, 9, 8, 9, 6, 2, 15, c[15], data[9]);
-    perm_elt(a, b, 10, 9, 10, 7, 3, 0, c[14], data[10]);
-    perm_elt(a, b, 11, 10, 11, 8, 4, 1, c[13], data[11]);
-    perm_elt(a, b, 0, 11, 12, 9, 5, 2, c[12], data[12]);
-    perm_elt(a, b, 1, 0, 13, 10, 6, 3, c[11], data[13]);
-    perm_elt(a, b, 2, 1, 14, 11, 7, 4, c[10], data[14]);
-    perm_elt(a, b, 3, 2, 15, 12, 8, 5, c[9], data[15]);
-    perm_elt(a, b, 4, 3, 0, 13, 9, 6, c[8], data[0]);
-    perm_elt(a, b, 5, 4, 1, 14, 10, 7, c[7], data[1]);
-    perm_elt(a, b, 6, 5, 2, 15, 11, 8, c[6], data[2]);
-    perm_elt(a, b, 7, 6, 3, 0, 12, 9, c[5], data[3]);
-    perm_elt(a, b, 8, 7, 4, 1, 13, 10, c[4], data[4]);
-    perm_elt(a, b, 9, 8, 5, 2, 14, 11, c[3], data[5]);
-    perm_elt(a, b, 10, 9, 6, 3, 15, 12, c[2], data[6]);
-    perm_elt(a, b, 11, 10, 7, 4, 0, 13, c[1], data[7]);
-    perm_elt(a, b, 0, 11, 8, 5, 1, 14, c[0], data[8]);
-    perm_elt(a, b, 1, 0, 9, 6, 2, 15, c[15], data[9]);
-    perm_elt(a, b, 2, 1, 10, 7, 3, 0, c[14], data[10]);
-    perm_elt(a, b, 3, 2, 11, 8, 4, 1, c[13], data[11]);
-    perm_elt(a, b, 4, 3, 12, 9, 5, 2, c[12], data[12]);
-    perm_elt(a, b, 5, 4, 13, 10, 6, 3, c[11], data[13]);
-    perm_elt(a, b, 6, 5, 14, 11, 7, 4, c[10], data[14]);
-    perm_elt(a, b, 7, 6, 15, 12, 8, 5, c[9], data[15]);
-    perm_elt(a, b, 8, 7, 0, 13, 9, 6, c[8], data[0]);
-    perm_elt(a, b, 9, 8, 1, 14, 10, 7, c[7], data[1]);
-    perm_elt(a, b, 10, 9, 2, 15, 11, 8, c[6], data[2]);
-    perm_elt(a, b, 11, 10, 3, 0, 12, 9, c[5], data[3]);
-    perm_elt(a, b, 0, 11, 4, 1, 13, 10, c[4], data[4]);
-    perm_elt(a, b, 1, 0, 5, 2, 14, 11, c[3], data[5]);
-    perm_elt(a, b, 2, 1, 6, 3, 15, 12, c[2], data[6]);
-    perm_elt(a, b, 3, 2, 7, 4, 0, 13, c[1], data[7]);
-    perm_elt(a, b, 4, 3, 8, 5, 1, 14, c[0], data[8]);
-    perm_elt(a, b, 5, 4, 9, 6, 2, 15, c[15], data[9]);
-    perm_elt(a, b, 6, 5, 10, 7, 3, 0, c[14], data[10]);
-    perm_elt(a, b, 7, 6, 11, 8, 4, 1, c[13], data[11]);
-    perm_elt(a, b, 8, 7, 12, 9, 5, 2, c[12], data[12]);
-    perm_elt(a, b, 9, 8, 13, 10, 6, 3, c[11], data[13]);
-    perm_elt(a, b, 10, 9, 14, 11, 7, 4, c[10], data[14]);
-    perm_elt(a, b, 11, 10, 15, 12, 8, 5, c[9], data[15]);
+    unsafe {
+        perm_elt(a, b, 0, 11, 0, 13, 9, 6, c[8], *data.get_unchecked(0));
+        perm_elt(a, b, 1, 0, 1, 14, 10, 7, c[7], *data.get_unchecked(1));
+        perm_elt(a, b, 2, 1, 2, 15, 11, 8, c[6], *data.get_unchecked(2));
+        perm_elt(a, b, 3, 2, 3, 0, 12, 9, c[5], *data.get_unchecked(3));
+        perm_elt(a, b, 4, 3, 4, 1, 13, 10, c[4], *data.get_unchecked(4));
+        perm_elt(a, b, 5, 4, 5, 2, 14, 11, c[3], *data.get_unchecked(5));
+        perm_elt(a, b, 6, 5, 6, 3, 15, 12, c[2], *data.get_unchecked(6));
+        perm_elt(a, b, 7, 6, 7, 4, 0, 13, c[1], *data.get_unchecked(7));
+        perm_elt(a, b, 8, 7, 8, 5, 1, 14, c[0], *data.get_unchecked(8));
+        perm_elt(a, b, 9, 8, 9, 6, 2, 15, c[15], *data.get_unchecked(9));
+        perm_elt(a, b, 10, 9, 10, 7, 3, 0, c[14], *data.get_unchecked(10));
+        perm_elt(a, b, 11, 10, 11, 8, 4, 1, c[13], *data.get_unchecked(11));
+        perm_elt(a, b, 0, 11, 12, 9, 5, 2, c[12], *data.get_unchecked(12));
+        perm_elt(a, b, 1, 0, 13, 10, 6, 3, c[11], *data.get_unchecked(13));
+        perm_elt(a, b, 2, 1, 14, 11, 7, 4, c[10], *data.get_unchecked(14));
+        perm_elt(a, b, 3, 2, 15, 12, 8, 5, c[9], *data.get_unchecked(15));
+        perm_elt(a, b, 4, 3, 0, 13, 9, 6, c[8], *data.get_unchecked(0));
+        perm_elt(a, b, 5, 4, 1, 14, 10, 7, c[7], *data.get_unchecked(1));
+        perm_elt(a, b, 6, 5, 2, 15, 11, 8, c[6], *data.get_unchecked(2));
+        perm_elt(a, b, 7, 6, 3, 0, 12, 9, c[5], *data.get_unchecked(3));
+        perm_elt(a, b, 8, 7, 4, 1, 13, 10, c[4], *data.get_unchecked(4));
+        perm_elt(a, b, 9, 8, 5, 2, 14, 11, c[3], *data.get_unchecked(5));
+        perm_elt(a, b, 10, 9, 6, 3, 15, 12, c[2], *data.get_unchecked(6));
+        perm_elt(a, b, 11, 10, 7, 4, 0, 13, c[1], *data.get_unchecked(7));
+        perm_elt(a, b, 0, 11, 8, 5, 1, 14, c[0], *data.get_unchecked(8));
+        perm_elt(a, b, 1, 0, 9, 6, 2, 15, c[15], *data.get_unchecked(9));
+        perm_elt(a, b, 2, 1, 10, 7, 3, 0, c[14], *data.get_unchecked(10));
+        perm_elt(a, b, 3, 2, 11, 8, 4, 1, c[13], *data.get_unchecked(11));
+        perm_elt(a, b, 4, 3, 12, 9, 5, 2, c[12], *data.get_unchecked(12));
+        perm_elt(a, b, 5, 4, 13, 10, 6, 3, c[11], *data.get_unchecked(13));
+        perm_elt(a, b, 6, 5, 14, 11, 7, 4, c[10], *data.get_unchecked(14));
+        perm_elt(a, b, 7, 6, 15, 12, 8, 5, c[9], *data.get_unchecked(15));
+        perm_elt(a, b, 8, 7, 0, 13, 9, 6, c[8], *data.get_unchecked(0));
+        perm_elt(a, b, 9, 8, 1, 14, 10, 7, c[7], *data.get_unchecked(1));
+        perm_elt(a, b, 10, 9, 2, 15, 11, 8, c[6], *data.get_unchecked(2));
+        perm_elt(a, b, 11, 10, 3, 0, 12, 9, c[5], *data.get_unchecked(3));
+        perm_elt(a, b, 0, 11, 4, 1, 13, 10, c[4], *data.get_unchecked(4));
+        perm_elt(a, b, 1, 0, 5, 2, 14, 11, c[3], *data.get_unchecked(5));
+        perm_elt(a, b, 2, 1, 6, 3, 15, 12, c[2], *data.get_unchecked(6));
+        perm_elt(a, b, 3, 2, 7, 4, 0, 13, c[1], *data.get_unchecked(7));
+        perm_elt(a, b, 4, 3, 8, 5, 1, 14, c[0], *data.get_unchecked(8));
+        perm_elt(a, b, 5, 4, 9, 6, 2, 15, c[15], *data.get_unchecked(9));
+        perm_elt(a, b, 6, 5, 10, 7, 3, 0, c[14], *data.get_unchecked(10));
+        perm_elt(a, b, 7, 6, 11, 8, 4, 1, c[13], *data.get_unchecked(11));
+        perm_elt(a, b, 8, 7, 12, 9, 5, 2, c[12], *data.get_unchecked(12));
+        perm_elt(a, b, 9, 8, 13, 10, 6, 3, c[11], *data.get_unchecked(13));
+        perm_elt(a, b, 10, 9, 14, 11, 7, 4, c[10], *data.get_unchecked(14));
+        perm_elt(a, b, 11, 10, 15, 12, 8, 5, c[9], *data.get_unchecked(15));
+    }
 }
 
 #[inline(always)]
 fn swap_bc(b: &mut [u32; 16], c: &mut [u32; 16]) {
-    b.swap_with_slice(c);
+    //b.swap_with_slice(c); checks bounds, but less code :)
+    std::mem::swap(b, c);
 }
 
 #[inline(always)]
