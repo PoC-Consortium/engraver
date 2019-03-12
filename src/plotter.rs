@@ -210,8 +210,10 @@ impl Plotter {
             match resume_info {
                 Ok(x) => progress = x,
                 Err(_) => {
-                    println!("Error");
-                    println!("File is already completed.");
+                    println!("Error:");
+                    println!("File is already completed.\n");
+                    println!("But if you are sure that this file is incomplete \
+                              or corrupted, then delete it before continuing.");
                     println!("Shutting Down...");
                     return;
                 }

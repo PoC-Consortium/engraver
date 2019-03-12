@@ -96,7 +96,9 @@ pub fn create_writer_thread(
 
 pub fn read_resume_info(file: &Path) -> Result<u64, u64> {
     let mut file = open_r(&file).unwrap();
-    file.seek(SeekFrom::End(-8)).unwrap();
+    if file.seek(SeekFrom::End(-8)).is_err() {
+        return Err(0);
+    }
 
     let mut progress = [0u8; 4];
     let mut double_monkey = [0u8; 4];
