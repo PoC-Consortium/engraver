@@ -2,7 +2,7 @@ use crate::plotter::{Buffer, PlotterTask, NONCE_SIZE, SCOOP_SIZE};
 use crate::utils::{open, open_r, open_using_direct_io};
 use crossbeam_channel::{Receiver, Sender};
 use std::cmp::min;
-use std::io::{Read, Seek, SeekFrom, Write};
+use std::io::{Read, Seek, SeekFrom, Write, Error, ErrorKind};
 use std::path::Path;
 use std::sync::Arc;
 
@@ -87,39 +87,46 @@ pub fn create_writer_thread(
             }
 
             if !task.benchmark {
-                write_resume_info(&filename, nonces_written);
+                match write_resume_info(&filename, nonces_written) {
+                    Err(_) => {
+                        println!("Error: couldn't write resume info");
+                    }
+                    Ok(_) => (),
+                }
             }
             tx_empty_buffers.send(buffer).unwrap();
         }
     }
 }
 
-pub fn read_resume_info(file: &Path) -> Result<u64, u64> {
-    let mut file = open_r(&file).unwrap();
-    file.seek(SeekFrom::End(-8)).unwrap();
+pub fn read_resume_info(file: &Path) -> Result<u64, Error> {
+    let mut file = open_r(&file)?;
+    file.seek(SeekFrom::End(-8))?;
+      
 
     let mut progress = [0u8; 4];
     let mut double_monkey = [0u8; 4];
 
-    file.read_exact(&mut progress[0..4]).unwrap();
-    file.read_exact(&mut double_monkey[0..4]).unwrap();
+    file.read_exact(&mut progress[0..4])?;
+    file.read_exact(&mut double_monkey[0..4])?;
 
     if double_monkey == [0xAF, 0xFE, 0xAF, 0xFE] {
         Ok(u64::from(as_u32_le(progress)))
     } else {
-        Err(0)
+        Err(Error::new(ErrorKind::Other, "End marker not found"))
     }
 }
 
-pub fn write_resume_info(file: &Path, nonces_written: u64) {
-    let mut file = open(&file).unwrap();
-    file.seek(SeekFrom::End(-8)).unwrap();
+pub fn write_resume_info(file: &Path, nonces_written: u64) -> Result<(), Error> {
+    let mut file = open(&file)?;
+    file.seek(SeekFrom::End(-8))?;
 
     let progress = as_u8_le(nonces_written as u32);
     let double_monkey = [0xAF, 0xFE, 0xAF, 0xFE];
 
-    file.write_all(&progress[0..4]).unwrap();
-    file.write_all(&double_monkey[0..4]).unwrap();
+    file.write_all(&progress[0..4])?;
+    file.write_all(&double_monkey[0..4])?;
+    Ok(())    
 }
 
 fn as_u32_le(array: [u8; 4]) -> u32 {

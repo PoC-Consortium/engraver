@@ -204,14 +204,15 @@ impl Plotter {
         let mut progress = 0;
         if file.exists() {
             if !task.quiet {
-                print!("File already exists, reading resume info...");
+                println!("File already exists, reading resume info...");
             }
             let resume_info = read_resume_info(&file);
             match resume_info {
                 Ok(x) => progress = x,
                 Err(_) => {
-                    println!("Error");
-                    println!("File is already completed.");
+                    println!("Error: couldn't read resume info from file '{}'", file.display());
+                    println!("If you are sure that this file is incomplete \
+                              or corrupted, then delete it before continuing.");
                     println!("Shutting Down...");
                     return;
                 }
@@ -225,7 +226,12 @@ impl Plotter {
             }
             if !task.benchmark {
                 preallocate(&file, plotsize, task.direct_io);
-                write_resume_info(&file, 0u64);
+                match write_resume_info(&file, 0u64) {
+                    Err(_) => {
+                        println!("Error: couldn't write resume info");
+                    }
+                    Ok(_) => (),
+                }
             }
             if !task.quiet {
                 println!("OK");
