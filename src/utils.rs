@@ -1,6 +1,7 @@
 use std::fs::{File, OpenOptions};
 use std::io;
 use std::path::Path;
+use std::process;
 
 cfg_if! {
     if #[cfg(unix)] {
@@ -115,7 +116,18 @@ cfg_if! {
                 open(&file)
             };
             let file = file.unwrap();
-            file.allocate(size_in_bytes).unwrap();
+            match file.allocate(size_in_bytes) {
+                Err(errno) => {
+                    // Exit if preallocate fails because write_resume_info() assumes
+                    // that the file isn't zero sized.
+                    println!("\n\nError: couldn't preallocate space for file. {}\n\
+                              Probable causes are:\n \
+                              * fallocate() is only supported on ext4 filesystems.\n \
+                              * Insufficient space.\n", errno);
+                    process::exit(1);
+                }
+                Ok(_) => (),
+            }
         }
 
     } else {
