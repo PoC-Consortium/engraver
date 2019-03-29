@@ -2,6 +2,8 @@ use humanize_rs::bytes::Bytes;
 use pbr::{MultiBar, Units};
 use raw_cpuid::CpuId;
 
+use crate::cpu_hasher::{SimdExtension,init_simd};
+use crate::buffer::PageAlignedByteBuffer;
 #[cfg(feature = "opencl")]
 use crate::ocl::gpu_get_info;
 use crate::scheduler::create_scheduler_thread;
@@ -14,7 +16,7 @@ use crossbeam_channel::bounded;
 use std::cmp::{max, min};
 use std::path::Path;
 use std::process;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::thread;
 use stopwatch::Stopwatch;
 
@@ -23,13 +25,6 @@ pub const NUM_SCOOPS: u64 = 4096;
 pub const NONCE_SIZE: u64 = SCOOP_SIZE * NUM_SCOOPS;
 
 pub struct Plotter {}
-
-extern "C" {
-    pub fn init_shabal_sse2() -> ();
-    pub fn init_shabal_avx() -> ();
-    pub fn init_shabal_avx2() -> ();
-    pub fn init_shabal_avx512() -> ();
-}
 
 pub struct PlotterTask {
     pub numeric_id: u64,
@@ -46,27 +41,6 @@ pub struct PlotterTask {
     pub zcb: bool,
 }
 
-pub struct Buffer {
-    data: Arc<Mutex<Vec<u8>>>,
-}
-
-impl Buffer {
-    fn new(buffer_size: usize) -> Self {
-        let pointer = aligned_alloc::aligned_alloc(buffer_size, page_size::get());
-        let data: Vec<u8>;
-        unsafe {
-            data = Vec::from_raw_parts(pointer as *mut u8, buffer_size, buffer_size);
-        }
-        Buffer {
-            data: Arc::new(Mutex::new(data)),
-        }
-    }
-
-    pub fn get_buffer(&self) -> Arc<Mutex<Vec<u8>>> {
-        self.data.clone()
-    }
-}
-
 impl Plotter {
     pub fn new() -> Plotter {
         Plotter {}
@@ -79,7 +53,7 @@ impl Plotter {
         let cores = sys_info::cpu_num().unwrap();
         let memory = sys_info::mem_info().unwrap();
 
-        let simd_ext = detect_simd();
+        let simd_ext = init_simd();
 
         if !task.quiet {
             println!("Engraver {} - PoC2 Plotter\n", crate_version!());
@@ -91,12 +65,12 @@ impl Plotter {
 
         if !task.quiet {
             println!(
-                "CPU: {} [using {} of {} cores{}{}]",
+                "CPU: {} [using {} of {} cores{}{:?}]",
                 cpu_name,
                 task.cpu_threads,
                 cores,
-                if simd_ext != "" { " + " } else { "" },
-                simd_ext
+                if let SimdExtension::None = &simd_ext { "" } else { " + " },
+                &simd_ext
             );
         }
 
@@ -174,7 +148,7 @@ impl Plotter {
             println!(
                 "RAM: Total={:.2} GiB, Free={:.2} GiB, Usage={:.2} GiB",
                 memory.total as f64 / 1024.0 / 1024.0,
-                memory.free as f64 / 1024.0 / 1024.0,
+                get_avail_mem(&memory) as f64 / 1024.0 / 1024.0,
                 (mem + gpu_mem_needed) as f64 / 1024.0 / 1024.0 / 1024.0
             );
 
@@ -226,11 +200,8 @@ impl Plotter {
             }
             if !task.benchmark {
                 preallocate(&file, plotsize, task.direct_io);
-                match write_resume_info(&file, 0u64) {
-                    Err(_) => {
-                        println!("Error: couldn't write resume info");
-                    }
-                    Ok(_) => (),
+                if write_resume_info(&file, 0u64).is_err() {
+                    println!("Error: couldn't write resume info");
                 }
             }
             if !task.quiet {
@@ -253,7 +224,7 @@ impl Plotter {
         let (tx_full_buffers, rx_full_buffers) = bounded(num_buffer as usize);
 
         for _ in 0..num_buffer {
-            let buffer = Buffer::new(buffer_size as usize);
+            let buffer = PageAlignedByteBuffer::new(buffer_size as usize);
             tx_empty_buffers.send(buffer).unwrap();
         }
 
@@ -284,17 +255,6 @@ impl Plotter {
         };
 
         let sw = Stopwatch::start_new();
-
-        unsafe {
-            match &*simd_ext {
-                "AVX512F" => init_shabal_avx512(),
-                "AVX2" => init_shabal_avx2(),
-                "AVX" => init_shabal_avx(),
-                "SSE2" => init_shabal_sse2(),
-                _ => (),
-            }
-        }
-
         let task = Arc::new(task);
 
         // hi bold! might make this optional in future releases.
@@ -411,7 +371,7 @@ fn calculate_mem_to_use(
     };
 
     // don't exceed free memory and leave some elbow room 1-1000/1024
-    mem = min(mem, memory.free * 1000 - gpu_mem_needed);
+    mem = min(mem, get_avail_mem(&memory) * 1000 - gpu_mem_needed);
 
     // rounding single/double buffer
     let num_buffer = if task.async_io { 2 } else { 1 };
@@ -423,16 +383,13 @@ fn calculate_mem_to_use(
     Ok(mem)
 }
 
-fn detect_simd() -> String {
-    if is_x86_feature_detected!("avx512f") {
-        String::from("AVX512F")
-    } else if is_x86_feature_detected!("avx2") {
-        String::from("AVX2")
-    } else if is_x86_feature_detected!("avx") {
-        String::from("AVX")
-    } else if is_x86_feature_detected!("sse2") {
-        String::from("SSE2")
-    } else {
-        String::from("")
-    }
+// sys_info ex, displays 0 avail on win
+#[cfg(not(windows))]
+fn get_avail_mem(memory: &sys_info::MemInfo) -> u64 {
+    memory.avail
+}
+
+#[cfg(windows)]
+fn get_avail_mem(memory: &sys_info::MemInfo) -> u64 {
+    memory.free
 }

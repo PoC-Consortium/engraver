@@ -8,6 +8,10 @@ const SCOOP_SIZE: usize = 64;
 const NONCE_SIZE: usize = (NUM_SCOOPS * SCOOP_SIZE);
 
 extern "C" {
+    pub fn init_shabal_sse2() -> ();
+    pub fn init_shabal_avx() -> ();
+    pub fn init_shabal_avx2() -> ();
+    pub fn init_shabal_avx512f() -> ();
     pub fn noncegen_sse2(
         cache: *mut c_void,
         cache_size: size_t,
@@ -56,15 +60,50 @@ pub struct CpuTask {
     pub local_nonces: u64,
 }
 
+#[derive(Debug, Clone)]
+pub enum SimdExtension {
+    AVX512f,
+    AVX2,
+    AVX,
+    SSE2,
+    None,
+}
+
+pub fn init_simd() -> SimdExtension {
+    if is_x86_feature_detected!("avx512f") {
+        unsafe {
+            init_shabal_avx512f();
+        }
+        SimdExtension::AVX512f
+    } else if is_x86_feature_detected!("avx2") {
+        unsafe {
+            init_shabal_avx2();
+        }
+        SimdExtension::AVX2
+    } else if is_x86_feature_detected!("avx") {
+        unsafe {
+            init_shabal_avx();
+        }
+        SimdExtension::AVX
+    } else if is_x86_feature_detected!("sse2") {
+        unsafe {
+            init_shabal_sse2();
+        }
+        SimdExtension::SSE2
+    } else {
+        SimdExtension::None
+    }
+}
+
 pub fn hash_cpu(
     tx: Sender<(u8, u8, u64)>,
     hasher_task: CpuTask,
-    simd_ext: String,
+    simd_ext: SimdExtension,
 ) -> impl FnOnce() {
     move || {
         unsafe {
-            match &*simd_ext {
-                "AVX512F" => noncegen_avx512(
+            match simd_ext {
+                SimdExtension::AVX512f => noncegen_avx512(
                     hasher_task.cache.ptr as *mut c_void,
                     hasher_task.cache_size,
                     hasher_task.chunk_offset,
@@ -72,7 +111,7 @@ pub fn hash_cpu(
                     hasher_task.local_startnonce,
                     hasher_task.local_nonces,
                 ),
-                "AVX2" => noncegen_avx2(
+                SimdExtension::AVX2 => noncegen_avx2(
                     hasher_task.cache.ptr as *mut c_void,
                     hasher_task.cache_size,
                     hasher_task.chunk_offset,
@@ -80,7 +119,7 @@ pub fn hash_cpu(
                     hasher_task.local_startnonce,
                     hasher_task.local_nonces,
                 ),
-                "AVX" => noncegen_avx(
+                SimdExtension::AVX => noncegen_avx(
                     hasher_task.cache.ptr as *mut c_void,
                     hasher_task.cache_size,
                     hasher_task.chunk_offset,
@@ -88,7 +127,7 @@ pub fn hash_cpu(
                     hasher_task.local_startnonce,
                     hasher_task.local_nonces,
                 ),
-                "SSE2" => noncegen_sse2(
+                SimdExtension::SSE2 => noncegen_sse2(
                     hasher_task.cache.ptr as *mut c_void,
                     hasher_task.cache_size,
                     hasher_task.chunk_offset,
@@ -143,7 +182,7 @@ mod test {
         if is_x86_feature_detected!("avx512f") {
             let mut buf = vec![0; 32 * plotter::NONCE_SIZE as usize];
             unsafe {
-                plotter::init_shabal_avx512();
+                init_shabal_avx512f();
                 noncegen_avx512(
                     buf.as_mut_ptr() as *mut c_void,
                     32,
@@ -159,7 +198,7 @@ mod test {
         if is_x86_feature_detected!("avx2") {
             let mut buf = vec![0; 32 * plotter::NONCE_SIZE as usize];
             unsafe {
-                plotter::init_shabal_avx2();
+                init_shabal_avx2();
                 noncegen_avx2(
                     buf.as_mut_ptr() as *mut c_void,
                     32,
@@ -175,7 +214,7 @@ mod test {
         if is_x86_feature_detected!("avx") {
             let mut buf = vec![0; 32 * plotter::NONCE_SIZE as usize];
             unsafe {
-                plotter::init_shabal_avx();
+                init_shabal_avx();
                 noncegen_avx(
                     buf.as_mut_ptr() as *mut c_void,
                     32,
@@ -191,7 +230,7 @@ mod test {
         if is_x86_feature_detected!("sse2") {
             let mut buf = vec![0; 32 * plotter::NONCE_SIZE as usize];
             unsafe {
-                plotter::init_shabal_sse2();
+                init_shabal_sse2();
                 noncegen_sse2(
                     buf.as_mut_ptr() as *mut c_void,
                     32,

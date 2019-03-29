@@ -1,9 +1,10 @@
-use crate::cpu_hasher::{hash_cpu, CpuTask, SafePointer};
+use crate::cpu_hasher::{SimdExtension, hash_cpu, CpuTask, SafePointer};
+use crate::buffer::PageAlignedByteBuffer;
 #[cfg(feature = "opencl")]
 use crate::gpu_hasher::{create_gpu_hasher_thread, GpuTask};
 #[cfg(feature = "opencl")]
 use crate::ocl::gpu_init;
-use crate::plotter::{Buffer, PlotterTask, NONCE_SIZE};
+use crate::plotter::{PlotterTask, NONCE_SIZE};
 #[cfg(feature = "opencl")]
 use crossbeam_channel::unbounded;
 use crossbeam_channel::{Receiver, Sender};
@@ -20,9 +21,9 @@ pub fn create_scheduler_thread(
     thread_pool: rayon::ThreadPool,
     mut nonces_hashed: u64,
     mut pb: Option<pbr::ProgressBar<pbr::Pipe>>,
-    rx_empty_buffers: Receiver<Buffer>,
-    tx_buffers_to_writer: Sender<Buffer>,
-    simd_ext: String,
+    rx_empty_buffers: Receiver<PageAlignedByteBuffer>,
+    tx_buffers_to_writer: Sender<PageAlignedByteBuffer>,
+    simd_ext: SimdExtension,
 ) -> impl FnOnce() {
     move || {
         // synchronisation chanel for all hashing devices (CPU+GPU)

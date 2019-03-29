@@ -192,16 +192,46 @@ pub fn platform_info() {
             to_string!(core::get_platform_info(&platform_id, PlatformInfo::Version))
         );
         let device_ids = core::get_device_ids(&platform_id, None, None).unwrap();
+        let context_properties = ContextProperties::new().platform(*platform_id);
         for (j, device_id) in device_ids.iter().enumerate() {
             println!(
-                "OCL: device {}, {} - {}",
+                "OCL:   device {}, {} - {}",
                 j,
                 to_string!(core::get_device_info(device_id, DeviceInfo::Vendor)),
                 to_string!(core::get_device_info(device_id, DeviceInfo::Name))
             );
+
+            let context =
+                core::create_context(Some(&context_properties), &[*device_id], None, None).unwrap();
+            let src_cstring = CString::new(SRC).unwrap();
+            let program = core::create_program_with_source(&context, &[src_cstring]).unwrap();
+            core::build_program(
+                &program,
+                None::<&[()]>,
+                &CString::new("").unwrap(),
+                None,
+                None,
+            )
+            .unwrap();
+            let kernel = core::create_kernel(&program, "calculate_nonces").unwrap();
+            let cores = get_cores(*device_id) as usize;
+            let kernel_workgroup_size = get_kernel_work_group_size(&kernel, *device_id);
+            println!(
+                "OCL:     cores={},kernel_workgroupsize={}",
+                cores, kernel_workgroup_size
+            );
         }
+        println!("OCL:");
     }
 }
+
+fn get_cores(device: core::DeviceId) -> u32 {
+    match core::get_device_info(device, DeviceInfo::MaxComputeUnits).unwrap() {
+        core::DeviceInfoResult::MaxComputeUnits(mcu) => mcu,
+        _ => panic!("Unexpected error"),
+    }
+}
+
 
 pub fn gpu_get_info(gpus: &[String], quiet: bool) -> u64 {
     let mut total_mem_needed = 0u64;
@@ -255,7 +285,7 @@ pub fn gpu_get_info(gpus: &[String], quiet: bool) -> u64 {
         let gpu_cores = if gpu_cores == 0 {
             max_compute_units as usize
         } else {
-            min(gpu_cores, max_compute_units as usize)
+            min(gpu_cores, 2 * max_compute_units as usize)
         };
         let mem_needed = 2 * gpu_cores * kernel_workgroup_size * 256 * 1024;
 

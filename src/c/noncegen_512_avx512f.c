@@ -9,7 +9,7 @@ sph_shabal_context global_32;
 mshabal512_context global_512;
 mshabal512_context_fast global_512_fast;
 
-void init_shabal_avx512() {
+void init_shabal_avx512f() {
     sph_shabal256_init(&global_32);
     mshabal_init_avx512f(&global_512, 256);
     global_512_fast.out_size = global_512.out_size;

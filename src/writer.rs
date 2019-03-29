@@ -1,4 +1,5 @@
-use crate::plotter::{Buffer, PlotterTask, NONCE_SIZE, SCOOP_SIZE};
+use crate::plotter::{PlotterTask, NONCE_SIZE, SCOOP_SIZE};
+use crate::buffer::PageAlignedByteBuffer;
 use crate::utils::{open, open_r, open_using_direct_io};
 use crossbeam_channel::{Receiver, Sender};
 use std::cmp::min;
@@ -12,8 +13,8 @@ pub fn create_writer_thread(
     task: Arc<PlotterTask>,
     mut nonces_written: u64,
     mut pb: Option<pbr::ProgressBar<pbr::Pipe>>,
-    rx_buffers_to_writer: Receiver<Buffer>,
-    tx_empty_buffers: Sender<Buffer>,
+    rx_buffers_to_writer: Receiver<PageAlignedByteBuffer>,
+    tx_empty_buffers: Sender<PageAlignedByteBuffer>,
 ) -> impl FnOnce() {
     move || {
         for buffer in rx_buffers_to_writer {
@@ -87,11 +88,8 @@ pub fn create_writer_thread(
             }
 
             if !task.benchmark {
-                match write_resume_info(&filename, nonces_written) {
-                    Err(_) => {
-                        println!("Error: couldn't write resume info");
-                    }
-                    Ok(_) => (),
+                if write_resume_info(&filename, nonces_written).is_err() {
+                    println!("Error: couldn't write resume info");
                 }
             }
             tx_empty_buffers.send(buffer).unwrap();

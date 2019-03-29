@@ -1,13 +1,13 @@
 use std::fs::{File, OpenOptions};
 use std::io;
 use std::path::Path;
-use std::process;
 
 cfg_if! {
     if #[cfg(unix)] {
         #[cfg(linux)]
         extern crate thread_priority;
         use std::process::Command;
+        use std::process;
         use std::os::unix::fs::OpenOptionsExt;
         use fs2::FileExt;
         #[cfg(linux)]
@@ -88,9 +88,9 @@ cfg_if! {
             let output = Command::new("lsblk")
                 .arg(source)
                 .arg("-o")
-                .arg("PHY-SeC")
+                .arg("PHY-SeC") // I'm strict here, LOG-SeC would do
                 .output()
-                .expect("failed to execute 'lsblk -o LOG-SeC'");
+                .expect("failed to execute 'lsblk -o PHY-SeC'");
 
             let sector_size = String::from_utf8(output.stdout).expect("not utf8");
             let sector_size = sector_size.split('\n').collect::<Vec<&str>>().get(1).unwrap_or_else(|| {
@@ -128,6 +128,12 @@ cfg_if! {
                 }
                 Ok(_) => (),
             }
+        }
+
+        pub fn free_disk_space(path: &str) -> u64 {
+            // I don't like the following code, but I had to. It's difficult to estimate the space available for a new file on ext4 due to overhead.
+            // Therefor I enforce a 2MB cushion assuming this is sufficient.
+            fs2::available_space(Path::new(&path)).unwrap().saturating_sub(2097152)
         }
 
     } else {
@@ -275,10 +281,10 @@ cfg_if! {
                 SetPriorityClass(GetCurrentProcess(),BELOW_NORMAL_PRIORITY_CLASS);
             }
         }
-
+        pub fn free_disk_space(path: &str) -> u64 {
+            fs2::available_space(Path::new(&path)).unwrap()
+        }
     }
 }
 
-pub fn free_disk_space(path: &str) -> u64 {
-    fs2::free_space(Path::new(&path)).unwrap()
-}
+

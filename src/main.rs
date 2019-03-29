@@ -14,6 +14,7 @@ mod scheduler;
 mod shabal256;
 mod utils;
 mod writer;
+mod buffer;
 
 use crate::plotter::{Plotter, PlotterTask};
 use crate::utils::set_low_prio;
@@ -228,7 +229,7 @@ fn main() {
     let cpu_threads = if cpu_threads == 0 {
         cores
     } else {
-        min(cores, cpu_threads)
+        min(2 * cores, cpu_threads)
     };
 
     // special case: dont use cpu if only a gpu is defined
