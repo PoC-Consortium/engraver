@@ -1,11 +1,11 @@
 use crate::poc_hashing::noncegen_rust;
-use libc::{c_void, size_t, uint64_t};
+use libc::{c_void, size_t};
 use std::slice::from_raw_parts_mut;
 use std::sync::mpsc::Sender;
 
 const NUM_SCOOPS: usize = 4096;
 const SCOOP_SIZE: usize = 64;
-const NONCE_SIZE: usize = (NUM_SCOOPS * SCOOP_SIZE);
+const NONCE_SIZE: usize = NUM_SCOOPS * SCOOP_SIZE;
 
 extern "C" {
     pub fn init_shabal_sse2() -> ();
@@ -16,33 +16,33 @@ extern "C" {
         cache: *mut c_void,
         cache_size: size_t,
         chunk_offset: size_t,
-        numeric_ID: uint64_t,
-        local_startnonce: uint64_t,
-        local_nonces: uint64_t,
+        numeric_ID: u64,
+        local_startnonce: u64,
+        local_nonces: u64,
     );
     pub fn noncegen_avx(
         cache: *mut c_void,
         cache_size: size_t,
         chunk_offset: size_t,
-        numeric_ID: uint64_t,
-        local_startnonce: uint64_t,
-        local_nonces: uint64_t,
+        numeric_ID: u64,
+        local_startnonce: u64,
+        local_nonces: u64,
     );
     pub fn noncegen_avx2(
         cache: *mut c_void,
         cache_size: size_t,
         chunk_offset: size_t,
-        numeric_ID: uint64_t,
-        local_startnonce: uint64_t,
-        local_nonces: uint64_t,
+        numeric_ID: u64,
+        local_startnonce: u64,
+        local_nonces: u64,
     );
     pub fn noncegen_avx512(
         cache: *mut c_void,
         cache_size: size_t,
         chunk_offset: size_t,
-        numeric_ID: uint64_t,
-        local_startnonce: uint64_t,
-        local_nonces: uint64_t,
+        numeric_ID: u64,
+        local_startnonce: u64,
+        local_nonces: u64,
     );
 }
 pub struct SafePointer {

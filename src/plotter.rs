@@ -228,7 +228,7 @@ impl Plotter {
             tx_empty_buffers.send(buffer).unwrap();
         }
 
-        let mut mb = MultiBar::new();
+        let mb = MultiBar::new();
 
         let p1x = if !task.quiet {
             let mut p1 = mb.create_bar(plotsize - progress * NONCE_SIZE);
