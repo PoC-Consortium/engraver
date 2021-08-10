@@ -637,7 +637,7 @@ fn unpack_shuffle_scatter(buffer: *const u8, gpu_context: &GpuContext, transfer_
             );
             for i in 0..(NUM_SCOOPS * 2) {
                 for j in (0..32).step_by(4) {
-                    for k in 0..MSHABAL512_VECTOR_SIZE {
+                    for k in 0..u64::min(MSHABAL512_VECTOR_SIZE, transfer_task.local_nonces - n) {
                         let data_offset = (((i & 1) * (4095 - (i >> 1)) + ((i + 1) & 1) * (i >> 1))
                             * SCOOP_SIZE
                             * transfer_task.cache_size
