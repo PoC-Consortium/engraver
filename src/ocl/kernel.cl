@@ -1,3 +1,6 @@
+#ifdef cl_clang_storage_class_specifiers
+#pragma OPENCL EXTENSION cl_clang_storage_class_specifiers : enable
+#endif
 typedef unsigned int sph_u32;
 
 #define SPH_C32(x)    ((sph_u32)(x ## U))
